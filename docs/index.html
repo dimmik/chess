@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Шахматы для малышей</title>
+  <meta name="description" content="Простые шахматы против компьютера для детей: подсказки ходов, отмена хода, три уровня сложности.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Шахматы для малышей</h1>
+  </header>
+
+  <main class="layout">
+    <section class="board-area">
+      <div class="player-bar" id="bar-top">
+        <span class="avatar" id="avatar-top">🤖</span>
+        <span class="name" id="name-top">Компьютер</span>
+        <span class="captured" id="captured-top"></span>
+      </div>
+      <div id="board" class="board" aria-label="Шахматная доска"></div>
+      <div class="player-bar" id="bar-bottom">
+        <span class="avatar" id="avatar-bottom">🧒</span>
+        <span class="name" id="name-bottom">Ты</span>
+        <span class="captured" id="captured-bottom"></span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="status" id="status" role="status" aria-live="polite">Твой ход!</div>
+      <div class="explain" id="explain"></div>
+
+      <div class="actions">
+        <button class="btn" id="btn-undo">↩️ Вернуть ход</button>
+        <button class="btn" id="btn-hint">💡 Подсказка</button>
+        <button class="btn btn-primary" id="btn-new">✨ Новая игра</button>
+      </div>
+
+      <details class="card settings" id="settings">
+        <summary>⚙️ Помощники</summary>
+        <label><input type="checkbox" id="opt-movable"> Подсвечивать фигуры, которые могут ходить</label>
+        <label><input type="checkbox" id="opt-moves"> Показывать, куда можно пойти</label>
+        <label><input type="checkbox" id="opt-danger"> Предупреждать об опасности</label>
+        <label><input type="checkbox" id="opt-sound"> Звук</label>
+        <ul class="legend">
+          <li><span class="lg lg-movable"></span> эта фигура может ходить</li>
+          <li><span class="lg lg-dot"></span> сюда можно пойти</li>
+          <li><span class="lg lg-capture"></span> здесь можно съесть фигуру</li>
+          <li><span class="lg lg-danger"></span> сюда можно, но там фигуру могут съесть</li>
+          <li><span class="lg lg-attacked">!</span> эту фигуру хотят съесть</li>
+        </ul>
+      </details>
+    </aside>
+  </main>
+
+  <div class="overlay" id="setup" hidden>
+    <div class="modal">
+      <h2>Давай сыграем!</h2>
+      <p class="q">За кого будешь играть?</p>
+      <div class="choice-row" id="choose-color">
+        <button class="choice" data-color="w">
+          <span class="choice-piece" data-piece="K"></span>
+          <span>Белые</span>
+          <small>ходят первыми</small>
+        </button>
+        <button class="choice" data-color="b">
+          <span class="choice-piece" data-piece="k"></span>
+          <span>Чёрные</span>
+          <small>ходят вторыми</small>
+        </button>
+      </div>
+      <p class="q">Насколько хитрый компьютер?</p>
+      <div class="level-row" id="choose-level">
+        <button class="level" data-level="baby">🐣<span>Малыш</span></button>
+        <button class="level" data-level="easy">🐰<span>Новичок</span></button>
+        <button class="level" data-level="medium">🦊<span>Хитрый</span></button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="btn-continue" hidden>Вернуться к игре</button>
+        <button class="btn btn-primary btn-big" id="btn-start">Играть!</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="gameover" hidden>
+    <div class="modal">
+      <div class="big-emoji" id="go-emoji">🏆</div>
+      <h2 id="go-title">Победа!</h2>
+      <p id="go-text"></p>
+      <div class="modal-actions">
+        <button class="btn" id="btn-go-undo">↩️ Вернуть ход</button>
+        <button class="btn btn-primary btn-big" id="btn-again">Сыграть ещё</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confetti" aria-hidden="true"></div>
+
+  <script src="pieces.js"></script>
+  <script src="engine.js"></script>
+  <script src="ai.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
