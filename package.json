@@ -1,0 +1,9 @@
+{
+  "name": "kids-chess",
+  "private": true,
+  "description": "Простые шахматы против компьютера для детей",
+  "scripts": {
+    "test": "node tests/perft.test.js && node tests/ai.test.js",
+    "start": "python3 -m http.server 8000 --directory docs"
+  }
+}
