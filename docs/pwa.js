@@ -76,9 +76,11 @@
 
   if (standalone()) document.body.classList.add('app');
 
+  $('app-version').textContent = self.APP_VERSION;
+
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
     });
   }
 })();
