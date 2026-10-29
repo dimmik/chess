@@ -550,8 +550,9 @@ body {
 .fen-card textarea.bad { border-color: var(--danger); }
 .fen-msg { min-height: 1.2em; font-size: 14px; margin: 4px 0 6px; color: var(--muted); }
 .fen-msg.bad { color: #b3261e; font-weight: 700; }
-.fen-actions { display: flex; gap: 8px; }
-.fen-actions .btn { flex: 1; font-size: 15px; padding: 9px 6px; }
+.fen-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fen-actions .btn { font-size: 15px; padding: 9px 6px; }
+.fen-actions .btn[hidden] { display: none; }
 
 .edit-problems { margin: 0; padding: 10px 14px 10px 32px; border-radius: 14px; background: #ffe1dc; color: #b3261e; font-weight: 700; font-size: 15px; }
 .edit-problems:empty { display: none; }
@@ -607,3 +608,41 @@ body.fs .layout, body.app .layout { padding-top: max(10px, env(safe-area-inset-t
   .modal > .modal-actions:last-child { bottom: -14px; margin-bottom: -14px; padding-bottom: 14px; }
 }
 #puzzles .modal { width: min(100%, 560px); }
+
+/* Мои позиции. */
+#history .modal { width: min(100%, 560px); }
+#history-empty { margin: 8px 0 14px; }
+.history-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.hist-item { position: relative; }
+.hist-load {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 3px solid #eee;
+  border-radius: 12px;
+  background: #fafafa;
+  color: var(--ink);
+  cursor: pointer;
+}
+.hist-load small { font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.2; }
+.hist-del {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  font-size: 14px;
+}
+.mini-board { width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; }
+.mini-board .mb-l { fill: var(--light); }
+.mini-board .mb-d { fill: var(--dark); }
+.mini-board .mb-w { fill: #fff; stroke: #26222b; stroke-width: 4; stroke-linejoin: round; paint-order: stroke; }
+.mini-board .mb-b { fill: #26222b; }

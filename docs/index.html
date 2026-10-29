@@ -77,6 +77,8 @@
           <div class="fen-actions">
             <button class="btn" id="fen-paste" hidden>📥 Вставить</button>
             <button class="btn" id="fen-copy">📋 Копировать</button>
+            <button class="btn" id="fen-share">🔗 Поделиться</button>
+            <button class="btn" id="fen-history">🕘 Мои позиции</button>
           </div>
         </div>
         <ul class="edit-problems" id="edit-problems"></ul>
@@ -149,6 +151,8 @@
         <button class="btn" id="btn-settings">⚙️ Настройки игры</button>
         <button class="btn" id="btn-edit">✏️ Расставить позицию</button>
         <button class="btn" id="btn-flip">🔄 Перевернуть доску</button>
+        <button class="btn" id="btn-history">🕘 Мои позиции</button>
+        <button class="btn" id="btn-share">🔗 Поделиться позицией</button>
         <button class="btn" id="btn-fullscreen" hidden>⛶ Весь экран</button>
         <button class="btn" id="btn-install" hidden>📲 Установить</button>
       </div>
@@ -184,6 +188,17 @@
       <div class="puzzle-grid" id="puzzle-grid"></div>
       <div class="modal-actions">
         <button class="btn" id="btn-puzzles-close">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="history" hidden>
+    <div class="modal">
+      <h2>🕘 Мои позиции</h2>
+      <p id="history-empty">Пока пусто. Позиция сохраняется, когда ты расставляешь её и нажимаешь «Играть», делишься ею или открываешь присланную ссылку.</p>
+      <div class="history-list" id="history-list"></div>
+      <div class="modal-actions">
+        <button class="btn" id="btn-history-close">Закрыть</button>
       </div>
     </div>
   </div>

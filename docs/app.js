@@ -677,9 +677,106 @@
     $('confirm-no').onclick = () => { $('confirm').hidden = true; };
   }
 
-  const OVERLAYS = ['setup', 'gameover', 'menu', 'puzzles', 'confirm', 'install-help'];
+  const OVERLAYS = ['setup', 'gameover', 'menu', 'puzzles', 'history', 'confirm', 'install-help'];
   function closeOverlays() {
     for (const id of OVERLAYS) $(id).hidden = true;
+  }
+
+  // ---------- Мои позиции и ссылки ----------
+
+  const HISTORY_KEY = 'kids-chess-positions';
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (e) { return []; }
+  }
+
+  function storeHistory(list) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch (e) { /* ничего */ }
+  }
+
+  // Запоминаем свою позицию (начальную расстановку не храним).
+  function rememberPosition(fen) {
+    if (!fen || fen.split(' ')[0] === START_FEN.split(' ')[0]) return;
+    const list = loadHistory().filter((x) => x.fen !== fen);
+    list.unshift({ fen, t: Date.now() });
+    storeHistory(list.slice(0, 40));
+  }
+
+  // Маленькая картинка позиции; фигуры берутся из общего спрайта (см. buildSprite).
+  function miniBoard(fen) {
+    const b = new Chess(fen).board;
+    let out = '<rect width="800" height="800" class="mb-l"/>';
+    for (let i = 0; i < 64; i++) {
+      const r = i >> 3, c = i & 7;
+      if ((r + c) % 2) out += `<rect x="${c * 100}" y="${r * 100}" width="100" height="100" class="mb-d"/>`;
+      if (b[i]) out += `<use href="#pc-${typeOf(b[i])}" x="${c * 100}" y="${r * 100}" class="mb-${colorOf(b[i])}"/>`;
+    }
+    return `<svg class="mini-board" viewBox="0 0 800 800" aria-hidden="true">${out}</svg>`;
+  }
+
+  function buildSprite() {
+    const sprite = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    sprite.setAttribute('aria-hidden', 'true');
+    sprite.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    sprite.innerHTML = Object.entries(PIECE_PATHS)
+      .map(([t, d]) => `<symbol id="pc-${t}" viewBox="0 0 100 100" width="100" height="100"><path d="${d}"/></symbol>`).join('');
+    document.body.prepend(sprite);
+  }
+
+  function openHistory() {
+    closeOverlays();
+    renderHistory();
+    $('history').hidden = false;
+  }
+
+  function renderHistory() {
+    const list = loadHistory();
+    $('history-empty').hidden = list.length > 0;
+    $('history-list').innerHTML = list.map((x) => {
+      const date = new Date(x.t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+      const who = x.fen.split(' ')[1] === 'w' ? 'ходят белые' : 'ходят чёрные';
+      return `<div class="hist-item"><button class="hist-load" data-fen="${x.fen}" title="${x.fen}">${miniBoard(x.fen)}` +
+        `<small>${date} · ${who}</small></button>` +
+        `<button class="hist-del" data-del="${x.fen}" title="Удалить" aria-label="Удалить">🗑️</button></div>`;
+    }).join('');
+  }
+
+  // Ссылка вида …/chess/?fen=4k3/P7/8/8/8/8/8/4K3_w_-_-_0_1 — пробелы заменены на «_», чтобы читалась.
+  function shareUrl(fen) {
+    return `${location.origin}${location.pathname}?fen=${fen.replace(/ /g, '_')}`;
+  }
+
+  // Делимся ссылкой на позицию: системным меню «Поделиться», а если его нет — копируем ссылку.
+  async function sharePosition(fen) {
+    rememberPosition(fen);
+    const url = shareUrl(fen);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Шахматы для малышей', text: `Шахматная позиция (FEN): ${fen}`, url });
+        return 'Ссылка отправлена 🔗';
+      } catch (e) {
+        if (e.name === 'AbortError') return '';
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      return 'Ссылка на позицию скопирована 🔗';
+    } catch (e) {
+      window.prompt('Скопируй ссылку на позицию:', url);
+      return '';
+    }
+  }
+
+  // Позиция из присланной ссылки (?fen=...). Адрес очищаем, чтобы перезагрузка вернула обычную игру.
+  function fenFromUrl() {
+    const raw = new URLSearchParams(location.search).get('fen');
+    if (!raw) return null;
+    history.replaceState(null, '', location.pathname);
+    try {
+      return normalizeFen(raw.replace(/_/g, ' '));
+    } catch (e) {
+      return null;
+    }
   }
 
   // ---------- Сохранение партии ----------
@@ -938,9 +1035,15 @@
       setExplain('');
       afterMove(null);
     };
+    $('fen-share').onclick = async () => {
+      const msg = await sharePosition(editFen());
+      if (msg) setFenMsg(msg);
+    };
+    $('fen-history').onclick = openHistory;
     $('edit-done').onclick = () => {
       if ($('edit-done').disabled) return;
       setupFen = editFen();
+      rememberPosition(setupFen);
       closeEditor();
       render();
       openSetup();
@@ -1071,6 +1174,30 @@
   $('btn-fullscreen').addEventListener('click', () => { $('menu').hidden = true; });
   $('btn-install').addEventListener('click', () => { $('menu').hidden = true; });
   $('btn-puzzles').onclick = openPuzzles;
+  $('btn-history').onclick = openHistory;
+  $('btn-history-close').onclick = () => { $('history').hidden = true; };
+  $('btn-share').onclick = async () => {
+    $('menu').hidden = true;
+    const msg = await sharePosition(game.fen());
+    if (msg) setExplain(msg);
+  };
+  $('history-list').onclick = (e) => {
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      storeHistory(loadHistory().filter((x) => x.fen !== del.dataset.del));
+      renderHistory();
+      return;
+    }
+    const b = e.target.closest('[data-fen]');
+    if (!b) return;
+    if (editing) {
+      $('history').hidden = true;
+      $('fen-input').value = b.dataset.fen;
+      loadFenText(b.dataset.fen);
+    } else {
+      openEditor(b.dataset.fen);
+    }
+  };
   $('btn-puzzles-close').onclick = () => { $('puzzles').hidden = true; };
   $('puzzle-tabs').onclick = (e) => {
     const b = e.target.closest('[data-set]');
@@ -1081,11 +1208,11 @@
     if (b) { unlockAudio(); startPuzzle(puzzleTab, Number(b.dataset.i)); }
   };
   // Клик мимо окна закрывает меню, список задач и вопрос.
-  for (const id of ['menu', 'puzzles', 'confirm']) {
+  for (const id of ['menu', 'puzzles', 'history', 'confirm']) {
     $(id).addEventListener('click', (e) => { if (e.target === $(id)) $(id).hidden = true; });
   }
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') for (const id of ['menu', 'puzzles', 'confirm', 'gameover']) $(id).hidden = true;
+    if (e.key === 'Escape') for (const id of ['menu', 'puzzles', 'history', 'confirm', 'gameover']) $(id).hidden = true;
   });
   setupEditorControls();
   // Клик мимо окна «конец игры» закрывает его, чтобы посмотреть на доску.
@@ -1108,7 +1235,15 @@
   });
 
   buildBoard();
-  if (!restoreGame()) {
+  buildSprite();
+  const shared = fenFromUrl();
+  if (shared) {
+    // Открыли присланную ссылку: показываем позицию в редакторе — там видно, всё ли в ней в порядке.
+    rememberPosition(shared);
+    restoreGame();
+    openEditor(shared);
+    setFenMsg('📩 Тебе прислали эту позицию — нажми «Играть»!');
+  } else if (!restoreGame()) {
     render();
     setStatus('Давай сыграем! ♟️');
     openSetup();

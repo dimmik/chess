@@ -8,7 +8,13 @@ const { matingMoves, forcedMate } = require('../docs/ai.js');
 const WANT = Number(process.argv[2]) || 30;
 const SECONDS = Number(process.argv[3]) || 120;
 let seed = Number(process.argv[4]) || 12345;
-const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+// mulberry32: простой и качественный генератор случайных чисел с seed.
+const rand = () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
 const pick = (a) => a[Math.floor(rand() * a.length)];
 const VAL = { q: 9, r: 5, b: 3, n: 3, p: 1 };
 
@@ -106,9 +112,12 @@ function evaluate(g) {
   const flightsBefore = before.inCheck('w') ? 0 : kingMoves(before);
   const whiteMaterial = g.board.reduce((s, p) => s + (p && p !== 'K' && p === p.toUpperCase() ? VAL[p.toLowerCase()] : 0), 0);
   const quiet = !check && !key.captured;
-  const score = mates.size * 2 + replies.length * 0.3 - duals * 1.5 + (quiet ? 6 : 0) + (check ? -2 : 0) +
-    (threat ? 0 : 6) + (flightsAfter > flightsBefore ? 4 : 0) + (sacrifice ? 4 : 0) +
-    (key.piece === 'K' ? 3 : 0) - Math.max(0, whiteMaterial - 16) * 0.5;
+  // Хорошая задача: у чёрных много защит, и на разные защиты — разные маты; ключ трудно найти.
+  if (replies.length < 4 || mates.size < 3 || duals > replies.length / 3) return null;
+  const whiteMoves = g.moves().length;
+  const score = mates.size * 2.5 + replies.length * 0.4 - duals * 2 + (quiet ? 6 : 0) + (check ? -3 : 0) +
+    (threat ? 0 : 3) + (flightsAfter > flightsBefore ? 3 : 0) + (sacrifice ? 4 : 0) +
+    whiteMoves * 0.1 - Math.max(0, whiteMaterial - 16) * 0.5;
   return {
     fen: g.fen(), key: squareName(key.from) + squareName(key.to), score: Math.round(score * 10) / 10,
     variations: mates.size, replies: replies.length, duals, threat, sacrifice, quiet, check, capture: !!key.captured,
