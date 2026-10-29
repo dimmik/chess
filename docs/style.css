@@ -391,6 +391,77 @@ body {
 .level span { font-size: 15px; font-weight: 800; color: var(--ink); }
 
 .big-emoji { font-size: 64px; line-height: 1.1; }
+
+.mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.level small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.pos-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; margin: 4px 0 16px; font-size: 15px; }
+.link-btn { font: inherit; font-weight: 700; color: var(--accent-dark); background: none; border: none; padding: 4px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Редактор позиции ---------- */
+
+.play-ui, .edit-ui { display: flex; flex-direction: column; gap: 12px; }
+.play-ui[hidden], .edit-ui[hidden] { display: none; }
+.actions-3 { grid-template-columns: repeat(3, 1fr); }
+.actions-3 .btn { font-size: 14px; padding: 10px 4px; }
+
+.palette { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.tool {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background: var(--light);
+  cursor: pointer;
+  font-size: 22px;
+}
+.tool.dark-bg { background: var(--dark); }
+.tool.eraser { grid-column: 7; grid-row: 1 / span 2; aspect-ratio: auto; background: #fff; border-color: #eee; font-size: 26px; }
+.tool.eraser.on { border-color: var(--accent); }
+.tool.eraser small { display: block; font-size: 11px; font-weight: 800; color: var(--muted); }
+.tool.on { border-color: var(--accent); box-shadow: 0 0 0 2px #fff inset; }
+.tool svg { width: 100%; height: 100%; }
+.tool svg path { stroke-linejoin: round; paint-order: stroke; }
+.tool svg.w path { fill: #fff; stroke: #26222b; stroke-width: 3.2; }
+.tool svg.b path { fill: #26222b; stroke: #26222b; stroke-width: 1; }
+
+.row-label { font-weight: 700; margin-bottom: 6px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg button {
+  font: inherit;
+  font-weight: 800;
+  padding: 8px;
+  border-radius: 12px;
+  border: 3px solid #eee;
+  background: #fafafa;
+  color: var(--ink);
+  cursor: pointer;
+}
+.seg button.on { border-color: var(--accent); background: #fff3ea; }
+
+.fen-card label { display: block; font-weight: 700; margin-bottom: 6px; font-size: 14px; }
+.fen-card textarea {
+  width: 100%;
+  resize: vertical;
+  font: 14px/1.35 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  padding: 8px 10px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  word-break: break-all;
+}
+.fen-card textarea:focus { outline: none; border-color: var(--accent); }
+.fen-card textarea.bad { border-color: var(--danger); }
+.fen-msg { min-height: 1.2em; font-size: 14px; margin: 4px 0 6px; color: var(--muted); }
+.fen-msg.bad { color: #b3261e; font-weight: 700; }
+.fen-actions { display: flex; gap: 8px; }
+.fen-actions .btn { flex: 1; font-size: 15px; padding: 9px 6px; }
+
+.edit-problems { margin: 0; padding: 10px 14px 10px 32px; border-radius: 14px; background: #ffe1dc; color: #b3261e; font-weight: 700; font-size: 15px; }
+.edit-problems:empty { display: none; }
+.board.editing .sq { cursor: pointer; }
 .steps { text-align: left; font-size: 17px; line-height: 1.5; margin: 8px 0 12px; padding-left: 24px; }
 .steps li { margin: 6px 0; }
 .share-icon { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 2px solid #3478f6; border-radius: 6px; color: #3478f6; font-weight: 800; font-size: 14px; vertical-align: middle; }
@@ -419,4 +490,10 @@ body.fs, body.app { --board: min(94vw, calc(100vh - 290px), 760px); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+.edit-ui .actions .btn-primary { grid-column: auto; }
+/* На телефоне в редакторе палитра сразу под доской. */
+@media (max-width: 899px) {
+  body.editing #status, body.editing #explain { display: none; }
 }
