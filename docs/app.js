@@ -1264,6 +1264,23 @@
     el.innerHTML = pieceSvg(el.dataset.piece, 'big');
   });
 
+  // На телефоне касание, которое открыло окно (например, ход пешкой на последнюю горизонталь),
+  // досылает click уже в это окно — и оно тут же закрывалось. Окно слушает только нажатия,
+  // начавшиеся в нём самом (клики с клавиатуры, detail === 0, пропускаем как есть).
+  function guardOverlay(box) {
+    let armed = false;
+    box.addEventListener('pointerdown', () => { armed = true; }, true);
+    box.addEventListener('click', (e) => {
+      if (!armed && e.detail !== 0) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    }, true);
+    new MutationObserver(() => { if (box.hidden) armed = false; })
+      .observe(box, { attributes: true, attributeFilter: ['hidden'] });
+  }
+  document.querySelectorAll('.overlay').forEach(guardOverlay);
+
   buildBoard();
   buildSprite();
   const shared = fenFromUrl();
