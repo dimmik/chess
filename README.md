@@ -67,6 +67,7 @@ Workflow `.github/workflows/pages.yml` при каждом пуше в `master` 
 - `docs/puzzles.js` — задачи;
 - `docs/app.js` — интерфейс;
 - `docs/pieces.js` — контуры фигур из шрифта DejaVu Sans;
+- `BACKLOG.md` — отложенные задачи;
 - `docs/version.js` — номер версии (виден в «⚙️ Помощники»); увеличивайте при каждом изменении сайта.
 
 ## Найди панд
