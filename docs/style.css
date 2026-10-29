@@ -279,6 +279,10 @@ body {
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .actions .btn-primary { grid-column: 1 / -1; }
 
+.actions-extra { display: flex; gap: 10px; }
+.actions-extra .btn { flex: 1; }
+.actions-extra:not(:has(.btn:not([hidden]))) { display: none; }
+
 .btn {
   font: inherit;
   font-weight: 800;
@@ -387,6 +391,9 @@ body {
 .level span { font-size: 15px; font-weight: 800; color: var(--ink); }
 
 .big-emoji { font-size: 64px; line-height: 1.1; }
+.steps { text-align: left; font-size: 17px; line-height: 1.5; margin: 8px 0 12px; padding-left: 24px; }
+.steps li { margin: 6px 0; }
+.share-icon { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 2px solid #3478f6; border-radius: 6px; color: #3478f6; font-weight: 800; font-size: 14px; vertical-align: middle; }
 .modal-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 200; overflow: hidden; }
@@ -397,6 +404,18 @@ body {
   animation: fall linear forwards;
 }
 @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
+
+/* Полный экран и установленное приложение: без заголовка, доска крупнее. */
+body.fs .top, body.app .top { display: none; }
+body.fs .layout, body.app .layout { padding-top: max(12px, env(safe-area-inset-top)); }
+body.fs, body.app { --board: min(94vw, calc(100vh - 290px), 760px); }
+@media (min-width: 900px) {
+  body.fs, body.app { --board: min(58vw, calc(100vh - 120px), 760px); }
+}
+@media (max-width: 899px) and (orientation: landscape) {
+  body.fs, body.app { --board: min(60vw, calc(100vh - 110px)); }
+  body.fs .layout, body.app .layout { flex-direction: row; align-items: flex-start; justify-content: center; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
