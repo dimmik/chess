@@ -5,7 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Шахматы для малышей</title>
   <meta name="description" content="Простые шахматы против компьютера для детей: подсказки ходов, отмена хода, три уровня сложности.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#ff8a3d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Шахматы">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
@@ -39,6 +46,11 @@
         <button class="btn" id="btn-undo">↩️ Вернуть ход</button>
         <button class="btn" id="btn-hint">💡 Подсказка</button>
         <button class="btn btn-primary" id="btn-new">✨ Новая игра</button>
+      </div>
+
+      <div class="actions-extra">
+        <button class="btn" id="btn-fullscreen" hidden>⛶ Весь экран</button>
+        <button class="btn" id="btn-install" hidden>📲 Установить</button>
       </div>
 
       <details class="card settings" id="settings">
@@ -99,11 +111,26 @@
     </div>
   </div>
 
+  <div class="overlay" id="install-help" hidden>
+    <div class="modal">
+      <div class="big-emoji">📲</div>
+      <h2>Установить игру</h2>
+      <ol class="steps">
+        <li>Нажми кнопку <b>«Поделиться»</b> <span class="share-icon" aria-hidden="true">⬆︎</span> внизу или вверху экрана.</li>
+        <li>Выбери <b>«На экран „Домой“»</b>.</li>
+        <li>Нажми <b>«Добавить»</b>.</li>
+      </ol>
+      <p>Иконка с конём появится на экране — игра будет открываться как приложение, даже без интернета.</p>
+      <button class="btn btn-primary btn-big" id="btn-install-close">Понятно</button>
+    </div>
+  </div>
+
   <div id="confetti" aria-hidden="true"></div>
 
   <script src="pieces.js"></script>
   <script src="engine.js"></script>
   <script src="ai.js"></script>
   <script src="app.js"></script>
+  <script src="pwa.js"></script>
 </body>
 </html>
