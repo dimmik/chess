@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Найди панд</title>
+  <meta name="description" content="Детская игра: найди всех панд в бамбуковой роще, получи приз и переходи на следующий уровень.">
+  <meta name="theme-color" content="#5bb36a">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐼</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #26402b;
+      --muted: #5d7462;
+      --accent: #ff8a3d;
+      --accent-dark: #e8701f;
+      --card: #ffffff;
+      --vh: 100vh;
+      color-scheme: light;
+    }
+    @supports (height: 100dvh) { :root { --vh: 100dvh; } }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      height: var(--vh);
+      display: flex;
+      flex-direction: column;
+      font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      color: var(--ink);
+      background: #cfeccf;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    /* ---------- Верхняя панель ---------- */
+    .bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 2;
+    }
+    .level { font-weight: 800; font-size: 16px; white-space: nowrap; }
+    .found {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      flex-wrap: wrap;
+      min-width: 0;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .found .slot { opacity: 0.22; filter: grayscale(1); transition: opacity 0.3s, transform 0.3s; }
+    .found .slot.on { opacity: 1; filter: none; transform: scale(1.15); }
+    .found.many { font-size: 15px; }
+    .icon-btn {
+      font: inherit;
+      font-weight: 800;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 12px;
+      background: #f0f7ef;
+      color: var(--ink);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .icon-btn .ico { font-size: 20px; line-height: 1; }
+    .icon-btn:active { transform: translateY(1px); }
+
+    /* ---------- Сцена ---------- */
+    .scene {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: linear-gradient(#bfe6ff, #e6f7d9 70%, #9fd38f);
+    }
+    #grove { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+
+    .panda { transform-box: fill-box; transform-origin: 50% 60%; }
+    .panda.found { animation: hop 0.6s ease-out; }
+    .panda.hint { animation: wiggle 0.35s ease-in-out 4; }
+    @keyframes hop {
+      30% { transform: translateY(-14%) scale(1.15); }
+      60% { transform: translateY(0) scale(0.95); }
+    }
+    @keyframes wiggle {
+      25% { transform: rotate(-12deg); }
+      75% { transform: rotate(12deg); }
+    }
+    .ring { fill: none; stroke: #ffd84d; stroke-width: 0.9; stroke-dasharray: 2 1.2; }
+    .ring.show { animation: ring-in 0.4s ease-out; }
+    @keyframes ring-in { from { opacity: 0; } }
+
+    .pop {
+      position: absolute;
+      pointer-events: none;
+      font-size: 30px;
+      transform: translate(-50%, -50%);
+      animation: pop-up 0.9s ease-out forwards;
+    }
+    .pop.miss { font-size: 22px; animation-duration: 0.6s; }
+    @keyframes pop-up {
+      from { opacity: 1; transform: translate(-50%, -50%) scale(0.6); }
+      to { opacity: 0; transform: translate(-50%, -160%) scale(1.3); }
+    }
+
+    /* ---------- Окна ---------- */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background: rgba(20, 40, 25, 0.45);
+      z-index: 10;
+      animation: fade 0.2s;
+    }
+    .overlay[hidden] { display: none; }
+    @keyframes fade { from { opacity: 0; } }
+    .modal {
+      width: min(100%, 420px);
+      max-height: calc(var(--vh) - 32px);
+      overflow: auto;
+      background: #fff;
+      border-radius: 24px;
+      padding: 22px 20px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      animation: rise 0.25s ease-out;
+    }
+    @keyframes rise { from { transform: translateY(20px) scale(0.96); } }
+    .modal h2 { margin: 4px 0 6px; font-size: 26px; }
+    .modal p { margin: 6px 0 14px; font-size: 17px; color: var(--muted); }
+    .prize { font-size: 90px; line-height: 1.1; animation: spin-in 0.8s cubic-bezier(.2, 1.4, .4, 1); }
+    @keyframes spin-in { from { transform: scale(0) rotate(-180deg); } }
+    .btn {
+      font: inherit;
+      font-weight: 800;
+      font-size: 18px;
+      padding: 13px 24px;
+      border: none;
+      border-radius: 14px;
+      background: #f0f7ef;
+      color: var(--ink);
+      cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+    }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark); }
+    .btn:active { transform: translateY(2px); box-shadow: none; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; margin: 10px 0 16px; }
+    .shelf span { font-size: 34px; background: #f6faf5; border-radius: 12px; padding: 6px 0; }
+    .link { font: inherit; background: none; border: none; color: var(--muted); text-decoration: underline; cursor: pointer; margin-top: 10px; }
+
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 20; overflow: hidden; }
+    #confetti span { position: absolute; top: -40px; font-size: 28px; animation: fall linear forwards; }
+    @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <span class="level" id="level">Уровень 1</span>
+    <span class="found" id="found" aria-live="polite"></span>
+    <button class="icon-btn" id="btn-hint" title="Подсказка"><span class="ico">💡</span></button>
+    <button class="icon-btn" id="btn-shelf" title="Мои призы"><span class="ico">🏆</span><span id="prize-count">0</span></button>
+  </header>
+
+  <main class="scene" id="scene">
+    <svg id="grove" aria-label="Бамбуковая роща — найди всех панд"></svg>
+  </main>
+
+  <div class="overlay" id="win" hidden>
+    <div class="modal">
+      <div class="prize" id="win-prize">🍓</div>
+      <h2 id="win-title">Все панды найдены!</h2>
+      <p id="win-text"></p>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-next">Следующий уровень ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="shelf" hidden>
+    <div class="modal">
+      <h2>🏆 Мои призы</h2>
+      <p id="shelf-text"></p>
+      <div class="shelf" id="shelf-list"></div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-shelf-close">Играть дальше</button>
+      </div>
+      <button class="link" id="btn-reset">начать с первого уровня</button>
+    </div>
+  </div>
+
+  <div id="confetti" aria-hidden="true"></div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+    const svg = $('grove');
+    const NS = 'http://www.w3.org/2000/svg';
+
+    const PRIZES = [
+      ['🍓', 'Клубника'], ['🍪', 'Печенька'], ['🎈', 'Шарик'], ['🧸', 'Мишка'], ['🍉', 'Арбуз'],
+      ['⭐', 'Звёздочка'], ['🍯', 'Мёд'], ['🧁', 'Кекс'], ['🌈', 'Радуга'], ['🦋', 'Бабочка'],
+      ['🍦', 'Мороженое'], ['🌻', 'Подсолнух'], ['🎁', 'Подарок'], ['🍭', 'Леденец'], ['🚀', 'Ракета'],
+      ['👑', 'Корона'], ['💎', 'Алмаз'], ['🏆', 'Кубок'],
+    ];
+
+    // ---------- Сохранение ----------
+    const KEY = 'panda-game';
+    let save = { level: 1, prizes: [] };
+    try { Object.assign(save, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* без сохранения */ }
+    const store = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ничего */ } };
+
+    // ---------- Уровень ----------
+    let W = 100, H = 160;
+    let pandas = [];      // { x, y, r, found, el, body }
+    let foundCount = 0;
+    let busy = false;
+
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    function el(tag, attrs, parent) {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+      if (parent) parent.appendChild(e);
+      return e;
+    }
+
+    function levelParams(level) {
+      return {
+        count: Math.min(3 + (level - 1), 15),
+        r: Math.max(6.2 - (level - 1) * 0.35, 3.2),       // радиус головы панды
+        back: Math.min(7 + level * 2, 34),                  // стебли сзади
+        front: Math.min(2 + level, 14),                     // стебли спереди
+        cover: Math.min(0.25 + level * 0.07, 0.6),          // насколько сильно закрываем панд
+      };
+    }
+
+    // Стебель бамбука с коленцами и листьями.
+    function stalk(g, x, w, shade, leaves) {
+      const top = rnd(-10, H * 0.15);
+      const col = `hsl(${rnd(95, 125)}, ${45 + shade * 15}%, ${30 + shade * 20}%)`;
+      const dark = `hsl(110, 45%, ${18 + shade * 18}%)`;
+      el('rect', { x: x - w / 2, y: top, width: w, height: H - top + 5, rx: w * 0.4, fill: col }, g);
+      el('rect', { x: x - w / 2 + w * 0.18, y: top, width: w * 0.16, height: H - top + 5, fill: 'rgba(255,255,255,0.18)' }, g);
+      const seg = rnd(9, 14);
+      for (let y = top + rnd(4, seg); y < H; y += seg) {
+        el('rect', { x: x - w / 2 - 0.3, y: y - 0.45, width: w + 0.6, height: 0.9, rx: 0.45, fill: dark }, g);
+        if (Math.random() < leaves) leafCluster(g, x, y, w, shade);
+      }
+    }
+
+    function leaf(g, x, y, len, angle, shade) {
+      const wid = len * 0.22;
+      el('ellipse', {
+        cx: x + Math.cos(angle) * len / 2, cy: y + Math.sin(angle) * len / 2,
+        rx: len / 2, ry: wid,
+        transform: `rotate(${angle * 180 / Math.PI} ${x + Math.cos(angle) * len / 2} ${y + Math.sin(angle) * len / 2})`,
+        fill: `hsl(${rnd(90, 130)}, ${50 + shade * 10}%, ${32 + shade * 22 + rnd(-4, 4)}%)`,
+      }, g);
+    }
+
+    function leafCluster(g, x, y, w, shade, size = 1) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const n = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < n; i++) {
+        const base = side > 0 ? rnd(-0.9, 0.5) : Math.PI + rnd(-0.5, 0.9);
+        leaf(g, x + side * w / 2, y, rnd(6, 11) * size, base, shade);
+      }
+    }
+
+    // Панда: голова (иногда с телом), чуть наклонена.
+    function drawPanda(g, p) {
+      const { x, y, r } = p;
+      // Наклон — на внутренней группе: у внешней свой transform-origin для анимаций.
+      const outer = el('g', { class: 'panda' }, g);
+      const grp = el('g', { transform: `rotate(${rnd(-14, 14)} ${x} ${y})` }, outer);
+      if (p.body) {
+        el('ellipse', { cx: x, cy: y + r * 1.45, rx: r * 0.95, ry: r * 0.85, fill: '#fafafa', stroke: '#c9c9c9', 'stroke-width': 0.25 }, grp);
+        el('ellipse', { cx: x - r * 0.75, cy: y + r * 1.35, rx: r * 0.3, ry: r * 0.55, fill: '#222', transform: `rotate(20 ${x - r * 0.75} ${y + r * 1.35})` }, grp);
+        el('ellipse', { cx: x + r * 0.75, cy: y + r * 1.35, rx: r * 0.3, ry: r * 0.55, fill: '#222', transform: `rotate(-20 ${x + r * 0.75} ${y + r * 1.35})` }, grp);
+      }
+      for (const s of [-1, 1]) el('circle', { cx: x + s * r * 0.72, cy: y - r * 0.72, r: r * 0.36, fill: '#222' }, grp);
+      el('circle', { cx: x, cy: y, r, fill: '#fdfdfd', stroke: '#c9c9c9', 'stroke-width': 0.25 }, grp);
+      for (const s of [-1, 1]) {
+        const ex = x + s * r * 0.37, ey = y - r * 0.05;
+        el('ellipse', { cx: ex, cy: ey, rx: r * 0.24, ry: r * 0.31, fill: '#222', transform: `rotate(${s * -28} ${ex} ${ey})` }, grp);
+        el('circle', { cx: ex + s * 0.02 * r, cy: ey - r * 0.04, r: r * 0.1, fill: '#fff' }, grp);
+        el('circle', { cx: ex + s * 0.04 * r, cy: ey - r * 0.03, r: r * 0.05, fill: '#222' }, grp);
+        el('circle', { cx: x + s * r * 0.55, cy: y + r * 0.35, r: r * 0.13, fill: '#ffb3c1', opacity: 0.8 }, grp);
+      }
+      el('ellipse', { cx: x, cy: y + r * 0.3, rx: r * 0.13, ry: r * 0.09, fill: '#222' }, grp);
+      el('path', {
+        d: `M${x - r * 0.12} ${y + r * 0.47} Q${x} ${y + r * 0.56} ${x + r * 0.12} ${y + r * 0.47}`,
+        fill: 'none', stroke: '#222', 'stroke-width': r * 0.05, 'stroke-linecap': 'round',
+      }, grp);
+      return outer;
+    }
+
+    function buildLevel() {
+      const box = svg.getBoundingClientRect();
+      W = 100;
+      H = Math.max(60, Math.min(230, 100 * box.height / Math.max(1, box.width)));
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      svg.innerHTML = '';
+      const P = levelParams(save.level);
+
+      // Небо, холмы, трава.
+      const defs = el('defs', {}, svg);
+      const sky = el('linearGradient', { id: 'sky', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+      el('stop', { offset: 0, 'stop-color': '#bfe6ff' }, sky);
+      el('stop', { offset: 0.7, 'stop-color': '#e6f7d9' }, sky);
+      el('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#sky)' }, svg);
+      el('ellipse', { cx: 25, cy: H * 0.98, rx: 60, ry: H * 0.18, fill: '#a8d99a' }, svg);
+      el('ellipse', { cx: 85, cy: H * 1.02, rx: 55, ry: H * 0.2, fill: '#95cf86' }, svg);
+
+      const back = el('g', {}, svg);
+      const mid = el('g', {}, svg);
+      const front = el('g', {}, svg);
+
+      // Задний ряд бамбука — бледнее.
+      for (let i = 0; i < P.back; i++) stalk(back, rnd(-2, W + 2), rnd(2.2, 3.6), 1, 0.55);
+
+      // Панды — не слишком близко друг к другу и к краям.
+      pandas = [];
+      let tries = 0;
+      while (pandas.length < P.count && tries++ < 4000) {
+        const r = P.r * rnd(0.85, 1.1);
+        const body = Math.random() < 0.45;
+        const x = rnd(r + 3, W - r - 3);
+        const y = rnd(H * 0.1 + r, H * (body ? 0.8 : 0.9) - r);
+        if (pandas.some((p) => Math.hypot(p.x - x, p.y - y) < (p.r + r) * 1.6 + (body || p.body ? r : 0))) continue;
+        pandas.push({ x, y, r, body, found: false });
+      }
+      for (const p of pandas) p.el = drawPanda(mid, p);
+
+      // Передний ряд: стебли и листья частично закрывают панд, но не целиком.
+      for (const p of pandas) {
+        if (Math.random() < P.cover + 0.25) {
+          const off = rnd(0.25, 0.75) * p.r * (Math.random() < 0.5 ? -1 : 1);
+          const w = p.r * rnd(0.35, 0.35 + P.cover);
+          stalk(front, p.x + off, w, 0, 0);
+        }
+        if (Math.random() < P.cover + 0.15) {
+          const a = rnd(0, Math.PI * 2);
+          const lx = p.x + Math.cos(a) * p.r * 0.8, ly = p.y + Math.sin(a) * p.r * 0.8;
+          for (let k = 0; k < 2 + Math.round(P.cover * 3); k++) leaf(front, lx, ly, p.r * rnd(0.9, 1.4), rnd(0, Math.PI * 2), 0);
+        }
+      }
+      // Ещё немного переднего бамбука там, где панд нет.
+      let extra = 0, guard = 0;
+      while (extra < P.front && guard++ < 400) {
+        const x = rnd(0, W);
+        if (pandas.some((p) => Math.abs(p.x - x) < p.r * 1.3)) continue;
+        stalk(front, x, rnd(2.6, 4), 0, 0.5);
+        extra++;
+      }
+      foundCount = 0;
+      busy = false;
+      renderBar();
+    }
+
+    // ---------- Панель ----------
+    function renderBar() {
+      $('level').textContent = `Уровень ${save.level}`;
+      $('found').classList.toggle('many', pandas.length > 8);
+      $('found').innerHTML = pandas.map((p) => `<span class="slot${p.found ? ' on' : ''}">🐼</span>`).join('');
+      $('found').setAttribute('aria-label', `Найдено ${foundCount} из ${pandas.length}`);
+      $('prize-count').textContent = save.prizes.length;
+    }
+
+    // ---------- Нажатия ----------
+    function toSvg(evt) {
+      const pt = svg.createSVGPoint();
+      pt.x = evt.clientX;
+      pt.y = evt.clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    function popAt(evt, text, cls) {
+      const s = document.createElement('div');
+      s.className = 'pop' + (cls ? ' ' + cls : '');
+      s.textContent = text;
+      const box = $('scene').getBoundingClientRect();
+      s.style.left = evt.clientX - box.left + 'px';
+      s.style.top = evt.clientY - box.top + 'px';
+      $('scene').appendChild(s);
+      setTimeout(() => s.remove(), 1000);
+    }
+
+    svg.addEventListener('pointerdown', (evt) => {
+      if (busy) return;
+      unlockAudio();
+      const pt = toSvg(evt);
+      // Попадание: в голову (с запасом) или в тело.
+      const hit = pandas.find((p) => !p.found && (
+        Math.hypot(p.x - pt.x, p.y - pt.y) < p.r * 1.3 ||
+        (p.body && Math.hypot((p.x - pt.x) / 1.1, (p.y + p.r * 1.45 - pt.y) / 0.95) < p.r)));
+      if (!hit) {
+        popAt(evt, '💨', 'miss');
+        tone(220, 0, 0.08, 'sine', 0.06);
+        return;
+      }
+      hit.found = true;
+      foundCount++;
+      hit.el.classList.remove('hint');
+      hit.el.classList.add('found');
+      // Найденную панду выносим вперёд и обводим.
+      svg.appendChild(hit.el);
+      const ring = el('circle', { class: 'ring show', cx: hit.x, cy: hit.y, r: hit.r * 1.45 }, svg);
+      ring.style.pointerEvents = 'none';
+      popAt(evt, pick(['❤️', '⭐', '✨', '💚']));
+      [660, 880].forEach((f, i) => tone(f, i * 0.08, 0.12, 'triangle', 0.15));
+      renderBar();
+      if (foundCount === pandas.length) {
+        busy = true;
+        setTimeout(levelDone, 700);
+      }
+    });
+
+    $('btn-hint').onclick = () => {
+      const p = pandas.find((x) => !x.found);
+      if (!p || busy) return;
+      p.el.classList.remove('hint');
+      void p.el.getBoundingClientRect();
+      p.el.classList.add('hint');
+      setTimeout(() => p.el.classList.remove('hint'), 1500);
+    };
+
+    // ---------- Конец уровня ----------
+    function levelDone() {
+      const [emoji, name] = PRIZES[(save.level - 1) % PRIZES.length];
+      save.prizes.push(emoji);
+      $('win-prize').textContent = emoji;
+      const n = pandas.length;
+      const word = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'панды' : 'панд';
+      $('win-title').textContent = `Все ${n} ${word} найдены!`;
+      $('win-text').textContent = `Уровень ${save.level} пройден. Твой приз — ${name.toLowerCase()}!`;
+      save.level++;
+      store();
+      renderBar();
+      confetti();
+      [523, 659, 784, 1047].forEach((f, k) => tone(f, k * 0.14, 0.25, 'triangle', 0.18));
+      $('win').hidden = false;
+    }
+
+    $('btn-next').onclick = () => {
+      $('win').hidden = true;
+      buildLevel();
+    };
+
+    function confetti() {
+      const box = $('confetti');
+      const bits = ['🎉', '⭐', '🎋', '🐼', '✨', '🎈'];
+      for (let k = 0; k < 36; k++) {
+        const s = document.createElement('span');
+        s.textContent = bits[k % bits.length];
+        s.style.left = Math.random() * 100 + 'vw';
+        s.style.animationDuration = 2.5 + Math.random() * 2.5 + 's';
+        s.style.animationDelay = Math.random() * 1 + 's';
+        box.appendChild(s);
+      }
+      setTimeout(() => { box.innerHTML = ''; }, 6000);
+    }
+
+    // ---------- Полка призов ----------
+    $('btn-shelf').onclick = () => {
+      $('shelf-text').textContent = save.prizes.length
+        ? `Призов: ${save.prizes.length}. Сейчас уровень ${save.level}.`
+        : 'Пока пусто — найди всех панд на уровне и получишь приз!';
+      $('shelf-list').innerHTML = save.prizes.map((p) => `<span>${p}</span>`).join('');
+      $('shelf').hidden = false;
+    };
+    $('btn-shelf-close').onclick = () => { $('shelf').hidden = true; };
+    $('btn-reset').onclick = () => {
+      if (!confirm('Начать с первого уровня? Призы останутся на полке.')) return;
+      save.level = 1;
+      store();
+      $('shelf').hidden = true;
+      buildLevel();
+    };
+
+    // ---------- Звук ----------
+    let audio = null;
+    function unlockAudio() {
+      if (audio) { if (audio.state === 'suspended') audio.resume(); return; }
+      try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; }
+    }
+    function tone(freq, start, dur, type = 'sine', vol = 0.15) {
+      if (!audio) return;
+      const t0 = audio.currentTime + start;
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.connect(g).connect(audio.destination);
+      o.start(t0);
+      o.stop(t0 + dur);
+    }
+
+    // Новая раскладка, только если размер экрана сильно поменялся (поворот), а уровень ещё не начат.
+    let lastAspect = 0;
+    window.addEventListener('resize', () => {
+      const box = svg.getBoundingClientRect();
+      const aspect = box.height / Math.max(1, box.width);
+      if (Math.abs(aspect - lastAspect) > 0.3 && foundCount === 0 && !busy) {
+        lastAspect = aspect;
+        buildLevel();
+      }
+    });
+
+    buildLevel();
+    const b0 = svg.getBoundingClientRect();
+    lastAspect = b0.height / Math.max(1, b0.width);
+  })();
+  </script>
+</body>
+</html>
