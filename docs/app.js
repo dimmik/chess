@@ -115,7 +115,7 @@
 
   function render(anim) {
     if (editing) { renderEditor(); return; }
-    const myTurn = !over && !thinking && isHuman(game.turn) && !puzzleSpent();
+    const myTurn = !over && !thinking && isHuman(game.turn);
     const myMoves = myTurn ? game.moves() : [];
     const movableFrom = new Set(myMoves.map((m) => m.from));
     const checkSq = game.inCheck() ? game.kingSquare(game.turn) : -1;
@@ -163,7 +163,8 @@
     saveGame();
     // В задачах вместо «Назад» и «Новая» — «Заново» и «Проверить».
     const pz = mode === 'puzzle';
-    $('btn-undo').hidden = pz;
+    $('btn-undo').hidden = false;
+    document.querySelector('.toolbar').classList.toggle('six', pz);
     $('btn-new').hidden = pz;
     $('btn-restart').hidden = !pz;
     $('btn-check').hidden = !pz;
@@ -239,6 +240,11 @@
   }
 
   function idleStatus() {
+    if (puzzleSpent()) {
+      setStatus(`Ход ${SIDE[game.turn].gen} ${SIDE[game.turn].icon}`);
+      if (!$('explain').textContent) setExplain('Ходы задачи закончились — можно доиграть позицию, «Назад» или «Заново».');
+      return;
+    }
     if (mode === 'puzzle' && game.turn !== player) {
       setStatus(`Ход соперника: за ${SIDE[game.turn].gen} ${SIDE[game.turn].icon}`);
       if (!$('explain').textContent) {
@@ -304,7 +310,7 @@
   const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
   function onSquarePress(i) {
-    if (over || thinking || !isHuman(game.turn) || puzzleSpent()) return false;
+    if (over || thinking || !isHuman(game.turn)) return false;
     const p = game.board[i];
     const target = targets.find((m) => m.to === i);
     if (selected >= 0 && target) {
@@ -386,17 +392,23 @@
 
   // ---------- Задачи ----------
 
-  // Ходы в задаче закончились, а мата нет — ждём «Проверить» или «Заново».
-  const puzzleSpent = () => mode === 'puzzle' && !over && puzzleMovesLeft() === 0;
+  // Ходы задачи закончились, а мата нет. Играть дальше можно — просто задача уже не решена.
+  const puzzleSpent = () => mode === 'puzzle' && !over && puzzleMovesLeft() <= 0;
 
   // «Проверить»: получилось ли решение (или можно ли ещё поставить мат).
   function checkPuzzle() {
     if (mode !== 'puzzle' || thinking) return;
     const P = PUZZLES[puzzle.set];
     const made = P.n - puzzleMovesLeft();
-    if (over && over.result === player) {
+    if (over && over.result === player && made <= P.n) {
       setStatus('Задача решена! 🏆', 'good');
       setExplain('Это мат — всё верно!');
+    } else if (over && over.result === player) {
+      setStatus(`Мат, но дольше, чем за ${P.n === 1 ? '1 ход' : `${P.n} хода`} 🙂`);
+      setExplain('Нажми «Заново» и попробуй найти мат быстрее.');
+    } else if (over && over.result !== 'draw') {
+      setStatus('Это мат тебе 😮', 'alert');
+      setExplain('Нажми «Назад» или «Заново» и попробуй другой путь.');
     } else if (over) {
       setStatus('Это пат, а не мат 😕', 'alert');
       setExplain('Королю некуда ходить, но шаха нет — это ничья. Нажми «Заново» и попробуй другой ход.');
@@ -405,7 +417,7 @@
       setExplain('Сделай ход на доске, а потом нажми «Проверить».');
     } else if (puzzleSpent()) {
       setStatus('Мата нет 😕', 'alert');
-      setExplain('Ходы закончились, а королю соперника есть куда деться. Нажми «Заново» и попробуй другой ход.');
+      setExplain(`За ${P.n === 1 ? '1 ход' : `${P.n} хода`} мат не получился. Нажми «Назад» или «Заново» и попробуй другой ход.`);
     } else if (game.turn !== player ? forcedMate(game, puzzleMovesLeft()) : matingMoves(game, puzzleMovesLeft(), true).length) {
       setStatus('Пока всё верно! 👍', 'good');
       setExplain(`Мат ещё можно поставить — найди ${puzzleMovesLeft() === 1 ? 'последний ход' : 'следующий ход'}.`);
@@ -495,10 +507,11 @@
       finish();
       return;
     }
-    if (puzzleSpent()) {
+    // Только что закончились ходы задачи — спокойно сообщаем, ходить дальше можно.
+    if (puzzleSpent() && puzzleMovesLeft() === 0 && game.turn !== player) {
       render(anim);
-      setStatus('Ходы закончились 🤔');
-      setExplain('Нажми «Проверить», чтобы узнать, получилось ли, или «Заново», чтобы начать с изначальной позиции.');
+      setStatus('Ходы задачи закончились 🤔');
+      setExplain('Нажми «Проверить», чтобы узнать, получилось ли. Можно ходить дальше, «Назад» или «Заново».');
       return;
     }
     if (!isHuman(game.turn)) {
@@ -537,7 +550,7 @@
   }
 
   function canUndo() {
-    if (mode === 'both') return game.log.length > 0;
+    if (mode === 'both' || mode === 'puzzle') return game.log.length > 0;
     return game.log.some((m) => colorOf(m.piece) === player);
   }
 
@@ -547,7 +560,7 @@
     thinking = false;
     // Откатываем до последнего хода игрока включительно (вдвоём — ровно один ход).
     let m;
-    do { m = game.undo(); } while (m && mode !== 'both' && colorOf(m.piece) !== player);
+    do { m = game.undo(); } while (m && mode === 'computer' && colorOf(m.piece) !== player);
     over = null;
     deselect();
     hint = null;
@@ -558,13 +571,14 @@
   }
 
   function showHint() {
-    if (over || thinking || !isHuman(game.turn) || puzzleSpent()) return;
+    if (over || thinking || !isHuman(game.turn)) return;
     // В задаче на ходу соперника — «Ответ»: самая упорная защита.
-    const defend = mode === 'puzzle' && game.turn !== player;
+    const inPuzzle = mode === 'puzzle' && !puzzleSpent();
+    const defend = inPuzzle && game.turn !== player;
     const m = defend ? puzzleReply()
-      : mode === 'puzzle' ? matingMoves(game, puzzleMovesLeft(), true)[0] : hintMove(game);
+      : inPuzzle ? matingMoves(game, puzzleMovesLeft(), true)[0] : hintMove(game);
     if (!m) {
-      if (mode === 'puzzle') setExplain('Отсюда мат уже не поставить — нажми «Заново» и начни с изначальной позиции. 💡');
+      if (inPuzzle) setExplain('Отсюда мат уже не поставить — нажми «Заново» и начни с изначальной позиции. 💡');
       return;
     }
     select(m.from);
@@ -593,7 +607,7 @@
     const won = over.result === player || (both && over.result !== 'draw');
     const lost = !both && over.result === other(player);
     let emoji, title, text;
-    const solvedPuzzle = mode === 'puzzle' && won;
+    const solvedPuzzle = mode === 'puzzle' && over.result === player && puzzleMovesLeft() >= 0;
     const nextPuzzle = solvedPuzzle && puzzle.index + 1 < PUZZLES[puzzle.set].list.length;
     if (solvedPuzzle) {
       emoji = '🏆'; title = 'Задача решена!';
@@ -626,9 +640,9 @@
     setStatus(`${title} ${emoji}`, won ? 'good' : lost ? 'alert' : '');
     setExplain(text);
     if (mode === 'puzzle' && !solvedPuzzle) {
-      // Пат в задаче — без окна: ребёнок сам нажмёт «Проверить» или «Заново».
-      setStatus('Ходить больше некому 🤔');
-      setExplain('Нажми «Проверить», чтобы узнать, получилось ли, или «Заново», чтобы начать с изначальной позиции.');
+      // Пат или мат «не вовремя» в задаче — без окна: ребёнок сам нажмёт «Проверить», «Назад» или «Заново».
+      setStatus('Партия закончилась 🤔');
+      setExplain('Нажми «Проверить», чтобы узнать, получилось ли, или «Назад» / «Заново».');
       return;
     }
     if (quiet) return;

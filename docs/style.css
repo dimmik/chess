@@ -324,7 +324,9 @@ body {
 .actions .btn-primary { grid-column: 1 / -1; }
 
 /* Главные кнопки — одна строка с иконками. */
-.toolbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.toolbar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+/* В задачах шесть кнопок — подписи мельче. */
+.toolbar.six .tb .lbl { font-size: 11px; letter-spacing: -0.2px; }
 .tb {
   font: inherit;
   display: flex;
@@ -662,3 +664,18 @@ body.fs .layout, body.app .layout { padding-top: max(10px, env(safe-area-inset-t
 .hint-arrow[hidden] { display: none; }
 .hint-arrow line { stroke: rgba(30, 120, 255, 0.85); stroke-width: 0.2; stroke-linecap: round; }
 .hint-arrow path { fill: rgba(30, 120, 255, 0.95); }
+@media (max-width: 400px) {
+  .toolbar.six { gap: 4px; }
+  .toolbar.six .tb .lbl { font-size: 10px; letter-spacing: -0.4px; }
+  .toolbar.six .tb .ico { font-size: 20px; }
+}
+/* Шесть кнопок в узкой панели (альбомная ориентация, узкий телефон) — два ряда по три. */
+@media (orientation: landscape), (max-width: 374px) {
+  .toolbar.six { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .toolbar.six .tb { min-height: 50px; }
+  .toolbar.six .tb .lbl { font-size: 12px; letter-spacing: 0; }
+}
+@media (orientation: portrait) and (max-width: 374px) {
+  /* Второй ряд кнопок в задачах занимает место — доска чуть меньше, чтобы всё влезло. */
+  body:has(.toolbar.six) { --board: min(100vw - 24px, var(--vh) - var(--reserve) + 44px - var(--hdr) + 2 * (38px - var(--bar)) - 56px, 680px); }
+}
