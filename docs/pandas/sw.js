@@ -1,6 +1,6 @@
 // Service worker игры «Найди панд»: пока есть сеть — свежие файлы, без сети — из кэша.
 // При изменении игры увеличивайте номер версии.
-const CACHE = 'pandas-v1';
+const CACHE = 'pandas-v2';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
