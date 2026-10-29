@@ -3,7 +3,7 @@
 importScripts('version.js');
 const CACHE = 'kids-chess-' + self.APP_VERSION;
 const FILES = [
-  './', 'index.html', 'style.css', 'version.js', 'pieces.js', 'engine.js', 'ai.js', 'app.js', 'pwa.js',
+  './', 'index.html', 'style.css', 'version.js', 'pieces.js', 'engine.js', 'ai.js', 'puzzles.js', 'app.js', 'pwa.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
 ];
