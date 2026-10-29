@@ -686,8 +686,9 @@
   }
 
   // «Новая»: сразу новая партия с прошлыми настройками; если партия идёт — спрашиваем.
-  function quickNewGame() {
-    const go = () => newGame(settings.mode, settings.color, settings.level, settings.fen);
+  // fromStart — с начальной расстановки, даже если прошлая партия была со своей позиции.
+  function quickNewGame(fromStart = false) {
+    const go = () => newGame(settings.mode, settings.color, settings.level, fromStart ? null : settings.fen);
     if (mode !== 'puzzle' && !over && game.log.length > 1) {
       askConfirm('Начать новую партию?', 'Эта партия закончится. Настройки — как в прошлый раз.', go);
     } else {
@@ -1189,7 +1190,7 @@
   $('btn-undo').onclick = undoMove;
   $('btn-go-undo').onclick = undoMove;
   $('btn-hint').onclick = showHint;
-  $('btn-new').onclick = quickNewGame;
+  $('btn-new').onclick = () => quickNewGame();
   $('btn-again').onclick = playAgain;
   $('btn-go-list').onclick = openPuzzles;
   $('btn-menu').onclick = () => { closeOverlays(); $('menu').hidden = false; };
@@ -1204,6 +1205,7 @@
   $('btn-check').onclick = checkPuzzle;
   $('btn-restart').onclick = restartPuzzle;
   $('btn-menu-new').onclick = () => { $('menu').hidden = true; quickNewGame(); };
+  $('btn-menu-start').onclick = () => { $('menu').hidden = true; quickNewGame(true); };
   $('btn-history').onclick = openHistory;
   $('btn-history-close').onclick = () => { $('history').hidden = true; };
   $('btn-share').onclick = async () => {
