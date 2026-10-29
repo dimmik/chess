@@ -14,8 +14,16 @@
   --select: #ffd84d;
   --last: rgba(255, 216, 77, 0.45);
   --check: #ff4d4d;
-  --board: min(94vw, 70vh, 600px);
+  /* Размеры раскладки: заголовок, полоски игроков и место под панель (в портретной ориентации). */
+  --vh: 100vh;
+  --hdr: 44px;
+  --bar: 38px;
+  --reserve: 350px;
+  --panel: clamp(250px, 30vw, 340px);
   color-scheme: light;
+}
+@supports (height: 100dvh) {
+  :root { --vh: 100dvh; }
 }
 
 * { box-sizing: border-box; }
@@ -23,22 +31,28 @@
 html, body { margin: 0; }
 
 body {
+  /* Размер доски считается здесь, чтобы учитывать переопределения на body (полный экран). */
+  --board: min(100vw - 24px, var(--vh) - var(--reserve) + 44px - var(--hdr) + 2 * (38px - var(--bar)), 680px);
   min-height: 100vh;
   font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);
   background: linear-gradient(160deg, var(--bg-1), var(--bg-2));
   background-attachment: fixed;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .top {
-  text-align: center;
-  padding: 12px 16px 4px;
+  height: var(--hdr);
+  display: grid;
+  place-items: center;
+  padding: env(safe-area-inset-top) 16px 0;
+  box-sizing: content-box;
 }
 
 .top h1 {
   margin: 0;
-  font-size: clamp(22px, 5vw, 34px);
+  font-size: clamp(20px, 4.5vw, 30px);
   font-weight: 800;
   letter-spacing: 0.5px;
 }
@@ -47,18 +61,30 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 8px 16px 24px;
+  gap: 10px;
+  padding: 6px 12px max(12px, env(safe-area-inset-bottom));
 }
 
-@media (min-width: 900px) {
-  :root { --board: min(58vw, calc(100vh - 170px), 640px); }
-  .layout {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 28px;
+/* Невысокий экран в портретной ориентации: без заголовка, полоски ниже. */
+@media (orientation: portrait) and (max-height: 760px) {
+  :root { --hdr: 0px; --bar: 32px; }
+  .top { display: none; }
+}
+
+/* Альбомная ориентация: доска слева, панель справа. */
+@media (orientation: landscape) {
+  body {
+    /* Доска ограничена высотой, панель забирает оставшуюся ширину (но не больше 340px). */
+    --board-h: calc(var(--vh) - var(--hdr) - 2 * var(--bar) - 36px);
+    --panel: clamp(250px, 100vw - var(--board-h) - 56px, 340px);
+    --board: min(var(--board-h), 100vw - var(--panel) - 44px, 760px);
   }
+  .layout { flex-direction: row; align-items: flex-start; justify-content: center; gap: 20px; }
+}
+@media (orientation: landscape) and (max-height: 640px) {
+  :root { --hdr: 0px; --bar: 32px; }
+  .top { display: none; }
+  .layout { padding-top: max(8px, env(safe-area-inset-top)); }
 }
 
 /* ---------- Доска ---------- */
@@ -67,7 +93,7 @@ body {
   width: var(--board);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .board {
@@ -81,6 +107,7 @@ body {
   box-shadow: 0 0 0 6px #7a5634, 0 12px 30px rgba(60, 40, 20, 0.35);
   touch-action: none;
   user-select: none;
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
 }
 
@@ -225,17 +252,17 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 4px 10px;
+  height: var(--bar);
+  padding: 0 10px;
   background: rgba(255, 255, 255, 0.7);
   border-radius: 12px;
   transition: box-shadow 0.2s;
 }
 .player-bar.active { box-shadow: 0 0 0 3px var(--accent); background: #fff; }
-.avatar { font-size: 24px; line-height: 1; }
-.name { font-weight: 800; }
-.captured { display: flex; align-items: center; flex-wrap: wrap; margin-left: auto; }
-.captured svg { width: 22px; height: 22px; margin-left: -4px; }
+.avatar { font-size: calc(var(--bar) * 0.58); line-height: 1; }
+.name { font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.captured { display: flex; align-items: center; margin-left: auto; min-width: 0; flex-shrink: 1; overflow: hidden; }
+.captured svg { width: calc(var(--bar) * 0.55); height: calc(var(--bar) * 0.55); margin-left: -5px; flex: none; }
 .captured svg path { stroke-linejoin: round; paint-order: stroke; }
 .captured svg.w path { fill: #fff; stroke: #26222b; stroke-width: 4; }
 .captured svg.b path { fill: #26222b; }
@@ -244,43 +271,108 @@ body {
 /* ---------- Панель ---------- */
 
 .panel {
-  width: min(100%, var(--board));
+  /* На узком экране панель во всю ширину, даже если доска меньше: текст не растягивается в высоту. */
+  width: min(100vw - 24px, max(var(--board), 360px));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
-@media (min-width: 900px) {
-  .panel { width: 340px; margin-top: 48px; }
+@media (orientation: landscape) {
+  .panel { width: var(--panel); margin-top: calc(var(--bar) + 6px); }
 }
 
-.status {
+.status-card {
   background: var(--card);
   border-radius: 16px;
-  padding: 14px 16px;
-  font-size: 20px;
+  padding: 10px 14px 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  transition: background 0.2s;
+}
+.status-card:has(.status.alert) { background: #ffe1dc; }
+.status-card:has(.status.good) { background: #e0f7e4; }
+
+.status {
+  font-size: 19px;
   font-weight: 800;
   text-align: center;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  line-height: 1.3;
 }
-.status.alert { background: #ffe1dc; color: #b3261e; animation: pop 0.4s; }
-.status.good { background: #e0f7e4; color: #1e7b34; animation: pop 0.4s; }
-@keyframes pop { 50% { transform: scale(1.04); } }
+.status.alert { color: #b3261e; animation: pop 0.4s; }
+.status.good { color: #1e7b34; animation: pop 0.4s; }
+@keyframes pop { 50% { transform: scale(1.05); } }
 
 .explain {
-  min-height: 3.2em;
-  background: rgba(255, 255, 255, 0.75);
-  border-radius: 14px;
-  padding: 10px 14px;
-  font-size: 16px;
-  line-height: 1.4;
+  margin-top: 4px;
+  min-height: calc(3 * 1.35em);
+  font-size: 15px;
+  line-height: 1.35;
+  text-align: center;
+  color: #3d4256;
 }
-.explain:empty { display: none; }
+@media (orientation: portrait) and (max-height: 760px) {
+  .explain { min-height: calc(2 * 1.35em); font-size: 14px; }
+}
+@media (orientation: portrait) and (max-height: 600px) {
+  :root { --reserve: 356px; }
+  .status { font-size: 17px; }
+  .tb { min-height: 48px; }
+  .tb .ico { font-size: 19px; }
+}
 
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .actions .btn-primary { grid-column: 1 / -1; }
 
-.actions-extra { display: flex; gap: 10px; }
-.actions-extra .btn { flex: 1; }
+/* Главные кнопки — одна строка с иконками. */
+.toolbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.tb {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 6px 2px;
+  border: none;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.tb .ico { font-size: 22px; line-height: 1; }
+.tb .lbl { font-size: 12px; font-weight: 800; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tb:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12); }
+.tb:disabled { opacity: 0.4; cursor: default; }
+.tb-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark), 0 4px 12px rgba(255, 138, 61, 0.3); }
+
+/* Меню «Ещё». */
+.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 12px; }
+.menu-grid .btn { white-space: normal; line-height: 1.2; font-size: 15px; }
+.menu-grid .btn[hidden] { display: none; }
+.modal .settings { text-align: left; background: #f7f7fa; border-radius: 14px; padding: 8px 14px; margin-bottom: 12px; }
+
+/* Список задач. */
+.puzzle-note { margin: 10px 0 8px !important; font-weight: 700; }
+.puzzle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.pz {
+  font: inherit;
+  font-weight: 800;
+  font-size: 17px;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 3px solid #eee;
+  background: #fafafa;
+  color: var(--ink);
+  cursor: pointer;
+  position: relative;
+}
+.pz.solved { background: #e0f7e4; border-color: #8fd6a0; }
+.pz.solved::after { content: '✓'; position: absolute; top: 1px; right: 5px; font-size: 12px; color: #1e7b34; }
+.pz.current { border-color: var(--accent); }
+
+.btn { flex: 1; }
 .actions-extra:not(:has(.btn:not([hidden]))) { display: none; }
 
 .btn {
@@ -458,8 +550,9 @@ body {
 .fen-card textarea.bad { border-color: var(--danger); }
 .fen-msg { min-height: 1.2em; font-size: 14px; margin: 4px 0 6px; color: var(--muted); }
 .fen-msg.bad { color: #b3261e; font-weight: 700; }
-.fen-actions { display: flex; gap: 8px; }
-.fen-actions .btn { flex: 1; font-size: 15px; padding: 9px 6px; }
+.fen-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fen-actions .btn { font-size: 15px; padding: 9px 6px; }
+.fen-actions .btn[hidden] { display: none; }
 
 .edit-problems { margin: 0; padding: 10px 14px 10px 32px; border-radius: 14px; background: #ffe1dc; color: #b3261e; font-weight: 700; font-size: 15px; }
 .edit-problems:empty { display: none; }
@@ -479,16 +572,9 @@ body {
 @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
 
 /* Полный экран и установленное приложение: без заголовка, доска крупнее. */
+body.fs, body.app { --hdr: 0px; }
 body.fs .top, body.app .top { display: none; }
-body.fs .layout, body.app .layout { padding-top: max(12px, env(safe-area-inset-top)); }
-body.fs, body.app { --board: min(94vw, calc(100vh - 290px), 760px); }
-@media (min-width: 900px) {
-  body.fs, body.app { --board: min(58vw, calc(100vh - 120px), 760px); }
-}
-@media (max-width: 899px) and (orientation: landscape) {
-  body.fs, body.app { --board: min(60vw, calc(100vh - 110px)); }
-  body.fs .layout, body.app .layout { flex-direction: row; align-items: flex-start; justify-content: center; }
-}
+body.fs .layout, body.app .layout { padding-top: max(10px, env(safe-area-inset-top)); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -496,6 +582,67 @@ body.fs, body.app { --board: min(94vw, calc(100vh - 290px), 760px); }
 
 .edit-ui .actions .btn-primary { grid-column: auto; }
 /* На телефоне в редакторе палитра сразу под доской. */
-@media (max-width: 899px) {
-  body.editing #status, body.editing #explain { display: none; }
+@media (orientation: portrait) {
+  body.editing .status-card { display: none; }
 }
+
+/* Невысокие экраны: окна компактнее. */
+@media (max-height: 700px) {
+  .modal { padding: 14px 14px; }
+  .modal h2 { font-size: 22px; }
+  .big-emoji { font-size: 44px; }
+  .choice-piece svg { width: 48px; height: 48px; }
+  .level { font-size: 24px; padding: 6px 4px; }
+  .modal .q { margin: 8px 0 6px; }
+}
+
+/* Кнопки внизу окна всегда видны, даже если окно прокручивается. */
+.modal > .modal-actions:last-child {
+  position: sticky;
+  bottom: -22px;
+  margin-bottom: -22px;
+  padding: 10px 0 22px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 12px);
+}
+@media (max-height: 700px) {
+  .modal > .modal-actions:last-child { bottom: -14px; margin-bottom: -14px; padding-bottom: 14px; }
+}
+#puzzles .modal { width: min(100%, 560px); }
+
+/* Мои позиции. */
+#history .modal { width: min(100%, 560px); }
+#history-empty { margin: 8px 0 14px; }
+.history-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.hist-item { position: relative; }
+.hist-load {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 3px solid #eee;
+  border-radius: 12px;
+  background: #fafafa;
+  color: var(--ink);
+  cursor: pointer;
+}
+.hist-load small { font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.2; }
+.hist-del {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  font-size: 14px;
+}
+.mini-board { width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; }
+.mini-board .mb-l { fill: var(--light); }
+.mini-board .mb-d { fill: var(--dark); }
+.mini-board .mb-w { fill: #fff; stroke: #26222b; stroke-width: 4; stroke-linejoin: round; paint-order: stroke; }
+.mini-board .mb-b { fill: #26222b; }

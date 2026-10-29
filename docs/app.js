@@ -3,7 +3,7 @@
   'use strict';
 
   const { Chess, START_FEN, colorOf, typeOf, other, squareName, normalizeFen } = window.ChessEngine;
-  const { chooseMove, hintMove } = window.ChessAI;
+  const { chooseMove, hintMove, matingMoves, forcedMate } = window.ChessAI;
 
   const NAMES = {
     p: { nom: 'пешка', acc: 'пешку', ins: 'пешкой' },
@@ -15,7 +15,7 @@
   };
 
   const HOW_MOVES = {
-    p: 'Пешка ходит только вперёд на одну клетку. Из начальной позиции может прыгнуть на две. А ест — наискосок! Дошла до конца доски — превращается в любую фигуру, кроме короля.',
+    p: 'Пешка ходит вперёд на одну клетку (с самого начала — можно на две), а ест наискосок. Дойдёт до конца — превратится в другую фигуру.',
     n: 'Конь ходит буквой «Г» и умеет перепрыгивать через другие фигуры.',
     b: 'Слон ходит по диагонали на сколько угодно клеток — всегда по клеткам одного цвета.',
     r: 'Ладья ходит по прямой: вперёд, назад, вправо и влево на сколько угодно клеток.',
@@ -31,7 +31,8 @@
 
   // ---------- Настройки ----------
 
-  const DEFAULTS = { mode: 'computer', color: 'w', level: 'baby', movable: true, moves: true, danger: true, sound: true };
+  // mode/color/level/fen — настройки последней новой партии, с ними «Новая» начинает игру сразу.
+  const DEFAULTS = { mode: 'computer', color: 'w', level: 'baby', fen: null, movable: true, moves: true, danger: true, sound: true };
   const settings = { ...DEFAULTS };
   try {
     Object.assign(settings, JSON.parse(localStorage.getItem('kids-chess-settings') || '{}'));
@@ -50,6 +51,7 @@
   let startFen = START_FEN;      // с какой позиции началась партия
   let setupFen = null;           // своя позиция для следующей партии (null — обычная расстановка)
   let editing = null;            // редактор позиции: { game, tool, castling, ep }
+  let puzzle = null;             // задача: { set: 'm1' | 'm2', index } (mode = 'puzzle')
   let selected = -1;
   let targets = [];        // разрешённые ходы выбранной фигуры
   let hint = null;         // { from, to }
@@ -133,6 +135,7 @@
 
     if (anim) animateMove(anim);
     renderBars();
+    saveGame();
     $('btn-undo').disabled = !canUndo();
     $('btn-hint').disabled = !myTurn;
   }
@@ -154,6 +157,11 @@
   const displayIndex = (i) => (flipped() ? 63 - i : i);
 
   function sideInfo(side) {
+    if (mode === 'puzzle') {
+      if (side === player) return { avatar: '🧒', name: 'Ты' };
+      const set = PUZZLES[puzzle.set];
+      return { avatar: '🧩', name: `${set.title} · ${puzzle.index + 1} из ${set.list.length}` };
+    }
     if (mode === 'both') return { avatar: SIDE[side].icon, name: cap(SIDE[side].nom) };
     if (side === player) return { avatar: '🧒', name: 'Ты' };
     return { avatar: '🤖', name: `Компьютер · ${LEVEL_NAMES[level]}` };
@@ -172,7 +180,7 @@
       const list = eaten[side].slice().sort((a, b) => order.indexOf(typeOf(a)) - order.indexOf(typeOf(b)));
       let html = list.map((p) => pieceSvg(p, 'cap')).join('');
       const adv = game.material() * (side === 'w' ? 1 : -1);
-      if (adv > 0) html += `<span class="adv">+${adv}</span>`;
+      if (adv > 0 && mode !== 'puzzle') html += `<span class="adv">+${adv}</span>`;
       $(`captured-${pos}`).innerHTML = html;
       $(`bar-${pos}`).classList.toggle('active', !over && game.turn === side);
     }
@@ -188,7 +196,22 @@
     $('explain').textContent = text || '';
   }
 
+  // Сколько ходов осталось до мата в задаче.
+  function puzzleMovesLeft() {
+    return PUZZLES[puzzle.set].n - game.log.filter((m) => colorOf(m.piece) === player).length;
+  }
+
   function idleStatus() {
+    if (mode === 'puzzle') {
+      const left = puzzleMovesLeft();
+      setStatus(left === 1 ? 'Поставь мат одним ходом! 🎯' : `Мат в ${left} хода: твой ход 🎯`);
+      if (!$('explain').textContent) {
+        setExplain(left === 1
+          ? `Ходят ${SIDE[player].nom}. Найди ход, после которого королю ${SIDE[other(player)].gen} некуда деться.`
+          : `Ходят ${SIDE[player].nom}. Найди ход, после которого мат будет при любом ответе соперника.`);
+      }
+      return;
+    }
     if (mode === 'both') {
       if (game.inCheck()) {
         setStatus(`Шах ${SIDE[game.turn].dat} королю! ⚠️`, 'alert');
@@ -226,8 +249,7 @@
       m.danger = game.isAttacked(m.to, other(me));
       game.undo();
     }
-    const t = typeOf(game.board[i]);
-    setExplain(`${cap(NAMES[t].nom)}. ${HOW_MOVES[t]}`);
+    setExplain(HOW_MOVES[typeOf(game.board[i])]);
   }
 
   function deselect() {
@@ -302,6 +324,7 @@
   }
 
   function playerMove(m, animate = true) {
+    if (mode === 'puzzle' && !puzzleMoveOk(m)) { wrongPuzzleMove(m, animate); return; }
     deselect();
     hint = null;
     const who = mode === 'both' ? cap(SIDE[game.turn].nom) : 'Ты';
@@ -315,6 +338,105 @@
     afterMove(animate ? m : null);
   }
 
+  // ---------- Задачи ----------
+
+  // Ход решает задачу: мат сразу или при любой защите в оставшиеся ходы.
+  function puzzleMoveOk(m) {
+    const left = puzzleMovesLeft();
+    game.makeMove(m);
+    const ok = forcedMate(game, left - 1);
+    game.undo();
+    return ok;
+  }
+
+  // Неверный ход показываем и через секунду возвращаем.
+  function wrongPuzzleMove(m, animate) {
+    deselect();
+    hint = null;
+    thinking = true;
+    game.makeMove(m);
+    sound('move');
+    render(animate ? m : null);
+    setStatus('Хм, так мат не получится 🤔', 'alert');
+    setExplain(puzzleMovesLeft() === 0
+      ? 'После этого хода у короля соперника остаётся спасение. Попробуй другой ход!'
+      : 'На этот ход у соперника найдётся защита. Попробуй другой ход!');
+    setTimeout(() => {
+      game.undo();
+      thinking = false;
+      render();
+      setStatus('Попробуй ещё раз! 💪');
+    }, 1100);
+  }
+
+  // Ответ соперника в задаче: защита, после которой у ребёнка меньше всего матующих ходов.
+  function puzzleReply() {
+    const left = puzzleMovesLeft();
+    let best = [], fewest = Infinity;
+    for (const r of game.moves()) {
+      game.makeMove(r);
+      const n = matingMoves(game, left).length;
+      game.undo();
+      if (n < fewest) { fewest = n; best = [r]; } else if (n === fewest) best.push(r);
+    }
+    return best[Math.floor(Math.random() * best.length)];
+  }
+
+  function startPuzzle(set, index) {
+    if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+    if (editing) closeEditor();
+    closeOverlays();
+    mode = 'puzzle';
+    puzzle = { set, index };
+    startFen = PUZZLES[set].list[index].fen;
+    game = new Chess(startFen);
+    player = game.turn;
+    orientation = player;
+    over = null;
+    thinking = false;
+    hint = null;
+    deselect();
+    const name = PUZZLES[set].list[index].name;
+    render();
+    setExplain('');
+    idleStatus();
+    if (name) setExplain(`«${name}». ${$('explain').textContent}`);
+  }
+
+  function solvedList() {
+    try { return JSON.parse(localStorage.getItem('kids-chess-solved') || '{}'); } catch (e) { return {}; }
+  }
+
+  function markSolved() {
+    const solved = solvedList();
+    const list = solved[puzzle.set] || [];
+    if (!list.includes(puzzle.index)) list.push(puzzle.index);
+    solved[puzzle.set] = list;
+    try { localStorage.setItem('kids-chess-solved', JSON.stringify(solved)); } catch (e) { /* ничего */ }
+  }
+
+  let puzzleTab = 'm1';
+  function openPuzzles() {
+    closeOverlays();
+    if (puzzle) puzzleTab = puzzle.set;
+    renderPuzzleList();
+    $('puzzles').hidden = false;
+  }
+
+  function renderPuzzleList() {
+    const set = PUZZLES[puzzleTab];
+    const solved = solvedList()[puzzleTab] || [];
+    document.querySelectorAll('#puzzle-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.set === puzzleTab));
+    $('puzzle-note').textContent = `${set.about} Решено: ${solved.length} из ${set.list.length}.`;
+    $('puzzle-grid').innerHTML = set.list.map((p, i) => {
+      const cls = ['pz'];
+      if (solved.includes(i)) cls.push('solved');
+      if (mode === 'puzzle' && puzzle.set === puzzleTab && puzzle.index === i) cls.push('current');
+      const title = (p.name ? p.name + ' · ' : '') + (p.fen.split(' ')[1] === 'w' ? 'ходят белые' : 'ходят чёрные');
+      return `<button class="${cls.join(' ')}" data-i="${i}" title="${title}">${i + 1}</button>`;
+    }).join('');
+  }
+
   function afterMove(anim) {
     over = game.outcome();
     if (over) {
@@ -325,8 +447,8 @@
     if (!isHuman(game.turn)) {
       thinking = true;
       render(anim);
-      setStatus('Компьютер думает… 🤔');
-      if (game.inCheck()) {
+      setStatus(mode === 'puzzle' ? 'Соперник думает… 🤔' : 'Компьютер думает… 🤔');
+      if (game.inCheck() && mode !== 'puzzle') {
         setStatus('Шах компьютеру! 😮', 'good');
         sound('check');
       }
@@ -339,12 +461,13 @@
 
   function computerMove() {
     aiTimer = null;
-    const m = chooseMove(game, level);
+    const m = mode === 'puzzle' ? puzzleReply() : chooseMove(game, level);
     thinking = false;
     game.makeMove(m);
     let text = '';
     const t = NAMES[typeOf(m.piece)].nom;
     text = `Компьютер пошёл: ${t} ${squareName(m.from)} → ${squareName(m.to)}.`;
+    if (mode === 'puzzle') text = `Соперник защищается: ${t} ${squareName(m.from)} → ${squareName(m.to)}. Теперь мат!`;
     if (m.captured) text = `Ой! Компьютер съел твою фигуру — ${NAMES[typeOf(m.captured)].acc}. 😯`;
     if (m.promotion) text = `Пешка компьютера дошла до конца и стала ${NAMES[m.promotion].ins}!`;
     sound(game.inCheck() ? 'check' : m.captured ? 'capture' : 'move');
@@ -379,7 +502,7 @@
 
   function showHint() {
     if (over || thinking || !isHuman(game.turn)) return;
-    const m = hintMove(game);
+    const m = mode === 'puzzle' ? matingMoves(game, puzzleMovesLeft(), true)[0] : hintMove(game);
     if (!m) return;
     select(m.from);
     hint = { from: m.from, to: m.to };
@@ -392,12 +515,19 @@
 
   // ---------- Конец игры ----------
 
-  function finish() {
+  // quiet — партия восстановлена после перезапуска: только надпись, без окна, звука и конфетти.
+  function finish(quiet = false) {
     const both = mode === 'both';
     const won = over.result === player || (both && over.result !== 'draw');
     const lost = !both && over.result === other(player);
     let emoji, title, text;
-    if (won && both) {
+    const solvedPuzzle = mode === 'puzzle' && won;
+    const nextPuzzle = solvedPuzzle && puzzle.index + 1 < PUZZLES[puzzle.set].list.length;
+    if (solvedPuzzle) {
+      emoji = '🏆'; title = 'Задача решена!';
+      text = nextPuzzle ? 'Мат! Отлично получилось. Переходим к следующей задаче?' : 'Мат! Это была последняя задача в этом наборе — ты молодец!';
+      if (!quiet) { markSolved(); confetti(); sound('win'); }
+    } else if (won && both) {
       emoji = '🏆'; title = `Мат! Победили ${SIDE[over.result].nom}`;
       text = `Королю ${SIDE[other(over.result)].gen} некуда деться. Можно вернуть ход и поискать другое решение.`;
       confetti();
@@ -423,11 +553,24 @@
     }
     setStatus(`${title} ${emoji}`, won ? 'good' : lost ? 'alert' : '');
     setExplain(text);
+    if (quiet) return;
     $('go-emoji').textContent = emoji;
     $('go-title').textContent = title;
     $('go-text').textContent = text;
-    $('btn-go-undo').hidden = !canUndo();
+    $('btn-go-undo').hidden = !canUndo() || solvedPuzzle;
+    $('btn-go-list').hidden = !solvedPuzzle;
+    $('btn-again').textContent = !solvedPuzzle ? 'Сыграть ещё' : nextPuzzle ? 'Следующая задача ▶' : 'Все задачи';
     setTimeout(() => { if (over) $('gameover').hidden = false; }, 700);
+  }
+
+  // «Сыграть ещё» в окне конца игры.
+  function playAgain() {
+    if (mode !== 'puzzle') { quickNewGame(); return; }
+    if (over && over.result === player && puzzle.index + 1 < PUZZLES[puzzle.set].list.length) {
+      startPuzzle(puzzle.set, puzzle.index + 1);
+    } else {
+      openPuzzles();
+    }
   }
 
   function confetti() {
@@ -448,10 +591,13 @@
 
   function newGame(m, color, lvl, fen) {
     if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+    if (editing) closeEditor();
+    closeOverlays();
     mode = m;
     player = color;
     level = lvl;
-    Object.assign(settings, { mode, color, level });
+    puzzle = null;
+    Object.assign(settings, { mode, color, level, fen: fen || null });
     saveSettings();
     startFen = fen || START_FEN;
     game = new Chess(startFen);
@@ -469,8 +615,8 @@
   }
 
   function openSetup() {
-    $('gameover').hidden = true;
-    let m = mode, color = player, lvl = level;
+    closeOverlays();
+    let m = settings.mode, color = settings.color, lvl = settings.level;
     const sync = () => {
       document.querySelectorAll('#choose-mode .level').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
       document.querySelectorAll('#choose-color .choice').forEach((b) => b.classList.toggle('on', b.dataset.color === color));
@@ -506,10 +652,171 @@
     $('setup').hidden = false;
   }
 
-  // Кнопка «Новая игра»: если играли со своей позиции, предлагаем её же.
-  function newGameDialog() {
-    setupFen = startFen === START_FEN ? null : startFen;
+  // «Настройки игры»: открываются с настройками последней новой партии.
+  function openSettings() {
+    setupFen = settings.fen;
     openSetup();
+  }
+
+  // «Новая»: сразу новая партия с прошлыми настройками; если партия идёт — спрашиваем.
+  function quickNewGame() {
+    const go = () => newGame(settings.mode, settings.color, settings.level, settings.fen);
+    if (mode !== 'puzzle' && !over && game.log.length > 1) {
+      askConfirm('Начать новую партию?', 'Эта партия закончится. Настройки — как в прошлый раз.', go);
+    } else {
+      go();
+    }
+  }
+
+  function askConfirm(title, text, onYes) {
+    closeOverlays();
+    $('confirm-title').textContent = title;
+    $('confirm-text').textContent = text;
+    $('confirm').hidden = false;
+    $('confirm-yes').onclick = () => { $('confirm').hidden = true; onYes(); };
+    $('confirm-no').onclick = () => { $('confirm').hidden = true; };
+  }
+
+  const OVERLAYS = ['setup', 'gameover', 'menu', 'puzzles', 'history', 'confirm', 'install-help'];
+  function closeOverlays() {
+    for (const id of OVERLAYS) $(id).hidden = true;
+  }
+
+  // ---------- Мои позиции и ссылки ----------
+
+  const HISTORY_KEY = 'kids-chess-positions';
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (e) { return []; }
+  }
+
+  function storeHistory(list) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch (e) { /* ничего */ }
+  }
+
+  // Запоминаем свою позицию (начальную расстановку не храним).
+  function rememberPosition(fen) {
+    if (!fen || fen.split(' ')[0] === START_FEN.split(' ')[0]) return;
+    const list = loadHistory().filter((x) => x.fen !== fen);
+    list.unshift({ fen, t: Date.now() });
+    storeHistory(list.slice(0, 40));
+  }
+
+  // Маленькая картинка позиции; фигуры берутся из общего спрайта (см. buildSprite).
+  function miniBoard(fen) {
+    const b = new Chess(fen).board;
+    let out = '<rect width="800" height="800" class="mb-l"/>';
+    for (let i = 0; i < 64; i++) {
+      const r = i >> 3, c = i & 7;
+      if ((r + c) % 2) out += `<rect x="${c * 100}" y="${r * 100}" width="100" height="100" class="mb-d"/>`;
+      if (b[i]) out += `<use href="#pc-${typeOf(b[i])}" x="${c * 100}" y="${r * 100}" class="mb-${colorOf(b[i])}"/>`;
+    }
+    return `<svg class="mini-board" viewBox="0 0 800 800" aria-hidden="true">${out}</svg>`;
+  }
+
+  function buildSprite() {
+    const sprite = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    sprite.setAttribute('aria-hidden', 'true');
+    sprite.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    sprite.innerHTML = Object.entries(PIECE_PATHS)
+      .map(([t, d]) => `<symbol id="pc-${t}" viewBox="0 0 100 100" width="100" height="100"><path d="${d}"/></symbol>`).join('');
+    document.body.prepend(sprite);
+  }
+
+  function openHistory() {
+    closeOverlays();
+    renderHistory();
+    $('history').hidden = false;
+  }
+
+  function renderHistory() {
+    const list = loadHistory();
+    $('history-empty').hidden = list.length > 0;
+    $('history-list').innerHTML = list.map((x) => {
+      const date = new Date(x.t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+      const who = x.fen.split(' ')[1] === 'w' ? 'ходят белые' : 'ходят чёрные';
+      return `<div class="hist-item"><button class="hist-load" data-fen="${x.fen}" title="${x.fen}">${miniBoard(x.fen)}` +
+        `<small>${date} · ${who}</small></button>` +
+        `<button class="hist-del" data-del="${x.fen}" title="Удалить" aria-label="Удалить">🗑️</button></div>`;
+    }).join('');
+  }
+
+  // Ссылка вида …/chess/?fen=4k3/P7/8/8/8/8/8/4K3_w_-_-_0_1 — пробелы заменены на «_», чтобы читалась.
+  function shareUrl(fen) {
+    return `${location.origin}${location.pathname}?fen=${fen.replace(/ /g, '_')}`;
+  }
+
+  // Делимся ссылкой на позицию: системным меню «Поделиться», а если его нет — копируем ссылку.
+  async function sharePosition(fen) {
+    rememberPosition(fen);
+    const url = shareUrl(fen);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Шахматы для малышей', text: `Шахматная позиция (FEN): ${fen}`, url });
+        return 'Ссылка отправлена 🔗';
+      } catch (e) {
+        if (e.name === 'AbortError') return '';
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      return 'Ссылка на позицию скопирована 🔗';
+    } catch (e) {
+      window.prompt('Скопируй ссылку на позицию:', url);
+      return '';
+    }
+  }
+
+  // Позиция из присланной ссылки (?fen=...). Адрес очищаем, чтобы перезагрузка вернула обычную игру.
+  function fenFromUrl() {
+    const raw = new URLSearchParams(location.search).get('fen');
+    if (!raw) return null;
+    history.replaceState(null, '', location.pathname);
+    try {
+      return normalizeFen(raw.replace(/_/g, ' '));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ---------- Сохранение партии ----------
+
+  function saveGame() {
+    if (editing) return;
+    const data = {
+      mode, player, level, orientation, startFen, puzzle,
+      moves: game.log.map((m) => [m.from, m.to, m.promotion || '']),
+    };
+    try { localStorage.setItem('kids-chess-game', JSON.stringify(data)); } catch (e) { /* ничего */ }
+  }
+
+  // Открываем ту партию, на которой остановились.
+  function restoreGame() {
+    let s;
+    try { s = JSON.parse(localStorage.getItem('kids-chess-game')); } catch (e) { return false; }
+    if (!s || !s.startFen) return false;
+    try {
+      if (s.mode === 'puzzle' && !(s.puzzle && PUZZLES[s.puzzle.set] && PUZZLES[s.puzzle.set].list[s.puzzle.index])) return false;
+      const g = new Chess(s.startFen);
+      for (const [from, to, promo] of s.moves) {
+        const m = g.moves(from).find((x) => x.to === to && (x.promotion || '') === promo);
+        if (!m) return false;
+        g.makeMove(m);
+      }
+      game = g;
+    } catch (e) {
+      return false;
+    }
+    ({ mode, player, level, orientation, startFen, puzzle } = s);
+    over = game.outcome();
+    if (over) {
+      render();
+      finish(true);
+    } else {
+      if (mode === 'puzzle') setExplain('');
+      afterMove(null);
+    }
+    return true;
   }
 
   // ---------- Редактор позиции ----------
@@ -519,8 +826,7 @@
   function openEditor(fen) {
     if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
     thinking = false;
-    $('setup').hidden = true;
-    $('gameover').hidden = true;
+    closeOverlays();
     const g = new Chess(fen);
     editing = { game: g, tool: editing ? editing.tool : 'P', castling: g.castling, ep: g.ep };
     deselect();
@@ -729,9 +1035,15 @@
       setExplain('');
       afterMove(null);
     };
+    $('fen-share').onclick = async () => {
+      const msg = await sharePosition(editFen());
+      if (msg) setFenMsg(msg);
+    };
+    $('fen-history').onclick = openHistory;
     $('edit-done').onclick = () => {
       if ($('edit-done').disabled) return;
       setupFen = editFen();
+      rememberPosition(setupFen);
       closeEditor();
       render();
       openSetup();
@@ -850,10 +1162,58 @@
   $('btn-undo').onclick = undoMove;
   $('btn-go-undo').onclick = undoMove;
   $('btn-hint').onclick = showHint;
-  $('btn-new').onclick = newGameDialog;
-  $('btn-again').onclick = newGameDialog;
+  $('btn-new').onclick = quickNewGame;
+  $('btn-again').onclick = playAgain;
+  $('btn-go-list').onclick = openPuzzles;
+  $('btn-menu').onclick = () => { closeOverlays(); $('menu').hidden = false; };
+  $('btn-menu-close').onclick = () => { $('menu').hidden = true; };
+  $('btn-settings').onclick = openSettings;
   $('btn-edit').onclick = () => openEditor(game.fen());
-  $('btn-flip').onclick = () => { orientation = other(orientation); render(); };
+  $('btn-flip').onclick = () => { $('menu').hidden = true; orientation = other(orientation); render(); };
+  // Полный экран и установка обрабатываются в pwa.js — здесь только закрываем меню.
+  $('btn-fullscreen').addEventListener('click', () => { $('menu').hidden = true; });
+  $('btn-install').addEventListener('click', () => { $('menu').hidden = true; });
+  $('btn-puzzles').onclick = openPuzzles;
+  $('btn-history').onclick = openHistory;
+  $('btn-history-close').onclick = () => { $('history').hidden = true; };
+  $('btn-share').onclick = async () => {
+    $('menu').hidden = true;
+    const msg = await sharePosition(game.fen());
+    if (msg) setExplain(msg);
+  };
+  $('history-list').onclick = (e) => {
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      storeHistory(loadHistory().filter((x) => x.fen !== del.dataset.del));
+      renderHistory();
+      return;
+    }
+    const b = e.target.closest('[data-fen]');
+    if (!b) return;
+    if (editing) {
+      $('history').hidden = true;
+      $('fen-input').value = b.dataset.fen;
+      loadFenText(b.dataset.fen);
+    } else {
+      openEditor(b.dataset.fen);
+    }
+  };
+  $('btn-puzzles-close').onclick = () => { $('puzzles').hidden = true; };
+  $('puzzle-tabs').onclick = (e) => {
+    const b = e.target.closest('[data-set]');
+    if (b) { puzzleTab = b.dataset.set; renderPuzzleList(); }
+  };
+  $('puzzle-grid').onclick = (e) => {
+    const b = e.target.closest('[data-i]');
+    if (b) { unlockAudio(); startPuzzle(puzzleTab, Number(b.dataset.i)); }
+  };
+  // Клик мимо окна закрывает меню, список задач и вопрос.
+  for (const id of ['menu', 'puzzles', 'history', 'confirm']) {
+    $(id).addEventListener('click', (e) => { if (e.target === $(id)) $(id).hidden = true; });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') for (const id of ['menu', 'puzzles', 'history', 'confirm', 'gameover']) $(id).hidden = true;
+  });
   setupEditorControls();
   // Клик мимо окна «конец игры» закрывает его, чтобы посмотреть на доску.
   $('gameover').onclick = (e) => { if (e.target === $('gameover')) $('gameover').hidden = true; };
@@ -875,7 +1235,17 @@
   });
 
   buildBoard();
-  render();
-  setStatus('Давай сыграем! ♟️');
-  openSetup();
+  buildSprite();
+  const shared = fenFromUrl();
+  if (shared) {
+    // Открыли присланную ссылку: показываем позицию в редакторе — там видно, всё ли в ней в порядке.
+    rememberPosition(shared);
+    restoreGame();
+    openEditor(shared);
+    setFenMsg('📩 Тебе прислали эту позицию — нажми «Играть»!');
+  } else if (!restoreGame()) {
+    render();
+    setStatus('Давай сыграем! ♟️');
+    openSetup();
+  }
 })();

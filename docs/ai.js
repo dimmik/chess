@@ -78,7 +78,44 @@
     return mediumMove(game.clone(), 0.1);
   }
 
-  const api = { chooseMove, hintMove };
+  // ---------- Решатель задач на мат ----------
+
+  const isMate = (game) => game.inCheck() && game.moves().length === 0;
+
+  // Сторона, которая только что сходила, ставит мат не более чем за k своих ходов при любой защите.
+  function forcedMate(game, k) {
+    if (isMate(game)) return true;
+    if (k === 0) return false;
+    const replies = game.moves();
+    if (replies.length === 0) return false; // пат
+    // Сначала ходы короля — они чаще всего спасают от мата, и перебор заканчивается раньше.
+    replies.sort((a, b) => (typeOf(b.piece) === 'k') - (typeOf(a.piece) === 'k'));
+    for (const r of replies) {
+      game.makeMove(r);
+      const ok = matingMoves(game, k, true).length > 0;
+      game.undo();
+      if (!ok) return false;
+    }
+    return true;
+  }
+
+  // Ходы, после которых мат ставится не более чем за n ходов (n = 1 — мат сразу).
+  // firstOnly — достаточно найти один такой ход.
+  function matingMoves(game, n, firstOnly = false) {
+    const found = [];
+    for (const m of game.moves()) {
+      game.makeMove(m);
+      const ok = forcedMate(game, n - 1);
+      game.undo();
+      if (ok) {
+        found.push(m);
+        if (firstOnly) break;
+      }
+    }
+    return found;
+  }
+
+  const api = { chooseMove, hintMove, matingMoves, forcedMate, isMate };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ChessAI = api;
 })(this);
