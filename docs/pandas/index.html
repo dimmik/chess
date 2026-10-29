@@ -6,7 +6,12 @@
   <title>Найди панд</title>
   <meta name="description" content="Детская игра: найди всех панд в бамбуковой роще, получи приз и переходи на следующий уровень.">
   <meta name="theme-color" content="#5bb36a">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐼</text></svg>">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Панды">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
@@ -80,6 +85,10 @@
     }
     .icon-btn .ico { font-size: 20px; line-height: 1; }
     .icon-btn:active { transform: translateY(1px); }
+    .icon-btn[hidden] { display: none; }
+    .steps { text-align: left; font-size: 17px; line-height: 1.5; margin: 8px 0 12px; padding-left: 24px; }
+    .steps li { margin: 6px 0; }
+    .share-icon { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 2px solid #3478f6; border-radius: 6px; color: #3478f6; font-weight: 800; font-size: 14px; vertical-align: middle; }
 
     /* ---------- Сцена ---------- */
     .scene {
@@ -179,6 +188,7 @@
   <header class="bar">
     <span class="level" id="level">Уровень 1</span>
     <span class="found" id="found" aria-live="polite"></span>
+    <button class="icon-btn" id="btn-install" title="Установить как приложение" hidden><span class="ico">📲</span></button>
     <button class="icon-btn" id="btn-hint" title="Подсказка"><span class="ico">💡</span></button>
     <button class="icon-btn" id="btn-shelf" title="Мои призы"><span class="ico">🏆</span><span id="prize-count">0</span></button>
   </header>
@@ -207,6 +217,22 @@
         <button class="btn btn-primary" id="btn-shelf-close">Играть дальше</button>
       </div>
       <button class="link" id="btn-reset">начать с первого уровня</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="install-help" hidden>
+    <div class="modal">
+      <div class="prize">📲</div>
+      <h2>Установить игру</h2>
+      <ol class="steps">
+        <li>Нажми кнопку <b>«Поделиться»</b> <span class="share-icon" aria-hidden="true">⬆︎</span> внизу или вверху экрана.</li>
+        <li>Выбери <b>«На экран „Домой“»</b>.</li>
+        <li>Нажми <b>«Добавить»</b>.</li>
+      </ol>
+      <p>На экране появится иконка с пандой — игра будет открываться как приложение, даже без интернета.</p>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-install-close">Понятно</button>
+      </div>
     </div>
   </div>
 
@@ -534,6 +560,34 @@
         buildLevel();
       }
     });
+
+    // ---------- Установка как приложение ----------
+    const standalone = matchMedia('(display-mode: standalone)').matches ||
+      matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    let installPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      installPrompt = e;
+      if (!standalone) $('btn-install').hidden = false;
+    });
+    window.addEventListener('appinstalled', () => { $('btn-install').hidden = true; });
+    if (ios && !standalone) $('btn-install').hidden = false;
+    $('btn-install').onclick = async () => {
+      if (installPrompt) {
+        installPrompt.prompt();
+        const { outcome } = await installPrompt.userChoice;
+        installPrompt = null;
+        if (outcome === 'accepted') $('btn-install').hidden = true;
+      } else {
+        $('install-help').hidden = false;
+      }
+    };
+    $('btn-install-close').onclick = () => { $('install-help').hidden = true; };
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' }).catch(() => {});
+    }
 
     buildLevel();
     const b0 = svg.getBoundingClientRect();
