@@ -73,9 +73,14 @@
     return babyMove(g);
   }
 
-  // Подсказка для ребёнка — хороший ход по мнению «среднего» уровня.
+  // Подсказка для ребёнка: если есть мат в 1 или 2 хода — он (mateIn), иначе хороший ход «среднего» уровня.
   function hintMove(game) {
-    return mediumMove(game.clone(), 0.1);
+    const g = game.clone();
+    for (const n of [1, 2]) {
+      const m = matingMoves(g, n, true)[0];
+      if (m) return Object.assign(m, { mateIn: n });
+    }
+    return mediumMove(g, 0.1);
   }
 
   // ---------- Решатель задач на мат ----------
