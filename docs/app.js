@@ -6,16 +6,16 @@
   const { chooseMove, hintMove } = window.ChessAI;
 
   const NAMES = {
-    p: { nom: 'пешка', acc: 'пешку' },
-    n: { nom: 'конь', acc: 'коня' },
-    b: { nom: 'слон', acc: 'слона' },
-    r: { nom: 'ладья', acc: 'ладью' },
-    q: { nom: 'ферзь', acc: 'ферзя' },
-    k: { nom: 'король', acc: 'короля' },
+    p: { nom: 'пешка', acc: 'пешку', ins: 'пешкой' },
+    n: { nom: 'конь', acc: 'коня', ins: 'конём' },
+    b: { nom: 'слон', acc: 'слона', ins: 'слоном' },
+    r: { nom: 'ладья', acc: 'ладью', ins: 'ладьёй' },
+    q: { nom: 'ферзь', acc: 'ферзя', ins: 'ферзём' },
+    k: { nom: 'король', acc: 'короля', ins: 'королём' },
   };
 
   const HOW_MOVES = {
-    p: 'Пешка ходит только вперёд на одну клетку. Из начальной позиции может прыгнуть на две. А ест — наискосок!',
+    p: 'Пешка ходит только вперёд на одну клетку. Из начальной позиции может прыгнуть на две. А ест — наискосок! Дошла до конца доски — превращается в любую фигуру, кроме короля.',
     n: 'Конь ходит буквой «Г» и умеет перепрыгивать через другие фигуры.',
     b: 'Слон ходит по диагонали на сколько угодно клеток — всегда по клеткам одного цвета.',
     r: 'Ладья ходит по прямой: вперёд, назад, вправо и влево на сколько угодно клеток.',
@@ -242,7 +242,7 @@
     const p = game.board[i];
     const target = targets.find((m) => m.to === i);
     if (selected >= 0 && target) {
-      playerMove(target);
+      requestMove(target);
       return false;
     }
     if (p && colorOf(p) === game.turn) {
@@ -273,6 +273,34 @@
     setTimeout(() => el.classList.remove('shake'), 400);
   }
 
+  // Ход игрока; если пешка дошла до конца — сначала спрашиваем, во что она превратится.
+  function requestMove(m, animate = true) {
+    if (!m.promotion) { playerMove(m, animate); return; }
+    choosePromotion(m.piece).then((promo) => {
+      if (!promo) { deselect(); render(); return; }
+      playerMove(game.moves(m.from).find((x) => x.to === m.to && x.promotion === promo), animate);
+    });
+  }
+
+  function choosePromotion(pawn) {
+    return new Promise((resolve) => {
+      const box = $('promo');
+      $('promo-choices').innerHTML = [...'qrbn'].map((t) => {
+        const p = colorOf(pawn) === 'w' ? t.toUpperCase() : t;
+        return `<button class="choice" data-promo="${t}"><span class="choice-piece">${pieceSvg(p, 'big')}</span>` +
+          `<span>${cap(NAMES[t].nom)}</span></button>`;
+      }).join('');
+      const done = (v) => { box.hidden = true; box.onclick = null; resolve(v); };
+      // Клик мимо окна — передумали ходить.
+      box.onclick = (e) => {
+        const b = e.target.closest('[data-promo]');
+        if (b) done(b.dataset.promo);
+        else if (e.target === box || e.target.id === 'promo-cancel') done(null);
+      };
+      box.hidden = false;
+    });
+  }
+
   function playerMove(m, animate = true) {
     deselect();
     hint = null;
@@ -281,7 +309,7 @@
     sound(m.captured ? 'capture' : 'move');
     let text = '';
     if (m.captured) text = `Здорово! ${who} ${mode === 'both' ? 'съели' : 'съел'} ${NAMES[typeOf(m.captured)].acc}! 🎉`;
-    if (m.promotion) text = 'Ура! Пешка дошла до конца доски и стала ферзём! 👑';
+    if (m.promotion) text = `Ура! Пешка дошла до конца доски и стала ${NAMES[m.promotion].ins}! 👑`;
     if (m.flag === 'k' || m.flag === 'q') text = 'Это рокировка: король спрятался, а ладья вышла в игру. 🏰';
     setExplain(text);
     afterMove(animate ? m : null);
@@ -318,7 +346,7 @@
     const t = NAMES[typeOf(m.piece)].nom;
     text = `Компьютер пошёл: ${t} ${squareName(m.from)} → ${squareName(m.to)}.`;
     if (m.captured) text = `Ой! Компьютер съел твою фигуру — ${NAMES[typeOf(m.captured)].acc}. 😯`;
-    if (m.promotion) text = 'Пешка компьютера дошла до конца и стала ферзём!';
+    if (m.promotion) text = `Пешка компьютера дошла до конца и стала ${NAMES[m.promotion].ins}!`;
     sound(game.inCheck() ? 'check' : m.captured ? 'capture' : 'move');
     over = game.outcome();
     render(m);
@@ -805,7 +833,7 @@
       d.ghost.remove();
       const to = cancelled ? -1 : squareFromPoint(e.clientX, e.clientY);
       const m = targets.find((t) => t.to === to);
-      if (m) playerMove(m, false);
+      if (m) requestMove(m, false);
       else render();
     } else if (d.again) {
       // Повторное нажатие на выбранную фигуру снимает выбор.
