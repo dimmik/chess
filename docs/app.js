@@ -90,6 +90,27 @@
       boardEl.appendChild(el);
       squares[d] = el;
     }
+    // Стрелка подсказки поверх доски.
+    boardEl.insertAdjacentHTML('beforeend',
+      '<svg class="hint-arrow" id="hint-arrow" viewBox="0 0 8 8" aria-hidden="true" hidden>' +
+      '<defs><marker id="arrow-head" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="2.6" markerHeight="2.6" orient="auto">' +
+      '<path d="M0 0 L10 5 L0 10 z"/></marker></defs><line marker-end="url(#arrow-head)"/></svg>');
+  }
+
+  function renderHintArrow() {
+    const svg = $('hint-arrow');
+    // У SVG нет свойства hidden — переключаем атрибут.
+    if (!hint || editing) { svg.setAttribute('hidden', ''); return; }
+    const x1 = displayCol(hint.from) + 0.5, y1 = displayRow(hint.from) + 0.5;
+    let x2 = displayCol(hint.to) + 0.5, y2 = displayRow(hint.to) + 0.5;
+    // Укорачиваем линию, чтобы наконечник указывал в центр клетки, а не заходил за неё.
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    x2 -= (x2 - x1) / len * 0.32;
+    y2 -= (y2 - y1) / len * 0.32;
+    const line = svg.querySelector('line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    svg.removeAttribute('hidden');
   }
 
   function render(anim) {
@@ -113,7 +134,9 @@
       if (settings.movable && movableFrom.has(i) && selected < 0) cls.push('movable');
       if (movableFrom.has(i) || (p && myTurn)) cls.push('clickable');
       if (hint && (i === hint.from || i === hint.to)) cls.push(i === hint.from ? 'hint-from' : 'hint-to');
-      const t = targetBySq.get(i);
+      let t = targetBySq.get(i);
+      // Пока показана подсказка, у фигуры отмечена только подсказанная клетка — чтобы не перепутать.
+      if (t && hint && selected === hint.from && i !== hint.to) t = null;
       if (t && settings.moves) cls.push('target');
       el.className = cls.join(' ');
 
@@ -135,6 +158,7 @@
     }
 
     if (anim) animateMove(anim);
+    renderHintArrow();
     renderBars();
     saveGame();
     // В задачах вместо «Назад» и «Новая» — «Заново» и «Проверить».
