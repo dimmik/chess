@@ -3,7 +3,7 @@
   'use strict';
 
   const { Chess, START_FEN, colorOf, typeOf, other, squareName, normalizeFen } = window.ChessEngine;
-  const { chooseMove, hintMove, matingMoves } = window.ChessAI;
+  const { chooseMove, hintMove, matingMoves, forcedMate } = window.ChessAI;
 
   const NAMES = {
     p: { nom: 'пешка', acc: 'пешку', ins: 'пешкой' },
@@ -72,7 +72,8 @@
   }
 
   // Кто ходит сам, а за кого ходит компьютер.
-  const isHuman = (c) => mode === 'both' || c === player;
+  // В задачах ребёнок ходит и за соперника (или просит «Ответ»).
+  const isHuman = (c) => mode === 'both' || mode === 'puzzle' || c === player;
 
   const flipped = () => orientation === 'b';
   // Индекс клетки по её месту на экране (0 — левый верхний угол) и обратно.
@@ -93,7 +94,7 @@
 
   function render(anim) {
     if (editing) { renderEditor(); return; }
-    const myTurn = !over && !thinking && isHuman(game.turn);
+    const myTurn = !over && !thinking && isHuman(game.turn) && !puzzleSpent();
     const myMoves = myTurn ? game.moves() : [];
     const movableFrom = new Set(myMoves.map((m) => m.from));
     const checkSq = game.inCheck() ? game.kingSquare(game.turn) : -1;
@@ -146,6 +147,10 @@
     $('btn-restart').disabled = thinking || game.log.length === 0;
     $('btn-check').disabled = thinking;
     $('btn-hint').disabled = !myTurn;
+    const defend = pz && !over && game.turn !== player;
+    $('btn-hint').querySelector('.ico').textContent = defend ? '🛡️' : '💡';
+    $('btn-hint').querySelector('.lbl').textContent = defend ? 'Ответ' : 'Подсказка';
+    $('btn-hint').title = defend ? 'Предложить ответный ход соперника' : 'Подсказка';
   }
 
   function animateMove(m) {
@@ -210,6 +215,13 @@
   }
 
   function idleStatus() {
+    if (mode === 'puzzle' && game.turn !== player) {
+      setStatus(`Ход соперника: за ${SIDE[game.turn].gen} ${SIDE[game.turn].icon}`);
+      if (!$('explain').textContent) {
+        setExplain(`Сходи за ${SIDE[game.turn].gen} сам — или нажми «🛡️ Ответ», и я предложу самую упорную защиту.`);
+      }
+      return;
+    }
     if (mode === 'puzzle') {
       const left = puzzleMovesLeft();
       setStatus(left === 1 ? 'Поставь мат одним ходом! 🎯' : `Мат в ${left} хода: твой ход 🎯`);
@@ -268,7 +280,7 @@
   const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
   function onSquarePress(i) {
-    if (over || thinking || !isHuman(game.turn)) return false;
+    if (over || thinking || !isHuman(game.turn) || puzzleSpent()) return false;
     const p = game.board[i];
     const target = targets.find((m) => m.to === i);
     if (selected >= 0 && target) {
@@ -283,10 +295,13 @@
         shake(i);
         return false;
       }
-      const wasSelected = selected === i;
-      select(i);
-      render();
-      return wasSelected ? 'again' : true;
+      // Повторное касание выбранной фигуры выбор не снимает: дети часто сначала «берут» фигуру,
+      // даже если она уже выбрана (например, подсказкой). Снять выбор — касанием пустой клетки.
+      if (selected !== i) {
+        select(i);
+        render();
+      }
+      return true;
     }
     if (p) {
       const whose = mode === 'both' ? `Сейчас ход ${SIDE[game.turn].gen}, а это` : 'Это фигура компьютера —';
@@ -334,11 +349,11 @@
   function playerMove(m, animate = true) {
     deselect();
     hint = null;
-    const who = mode === 'both' ? cap(SIDE[game.turn].nom) : 'Ты';
+    const who = mode === 'both' || (mode === 'puzzle' && game.turn !== player) ? cap(SIDE[game.turn].nom) : 'Ты';
     game.makeMove(m);
     sound(m.captured ? 'capture' : 'move');
     let text = '';
-    if (m.captured) text = `Здорово! ${who} ${mode === 'both' ? 'съели' : 'съел'} ${NAMES[typeOf(m.captured)].acc}! 🎉`;
+    if (m.captured) text = `${who === 'Ты' ? 'Здорово! Ты съел' : `${who} съели`} ${NAMES[typeOf(m.captured)].acc}!${who === 'Ты' ? ' 🎉' : ''}`;
     if (m.promotion) text = `Ура! Пешка дошла до конца доски и стала ${NAMES[m.promotion].ins}! 👑`;
     if (m.flag === 'k' || m.flag === 'q') text = 'Это рокировка: король спрятался, а ладья вышла в игру. 🏰';
     setExplain(text);
@@ -367,7 +382,7 @@
     } else if (puzzleSpent()) {
       setStatus('Мата нет 😕', 'alert');
       setExplain('Ходы закончились, а королю соперника есть куда деться. Нажми «Заново» и попробуй другой ход.');
-    } else if (matingMoves(game, puzzleMovesLeft(), true).length) {
+    } else if (game.turn !== player ? forcedMate(game, puzzleMovesLeft()) : matingMoves(game, puzzleMovesLeft(), true).length) {
       setStatus('Пока всё верно! 👍', 'good');
       setExplain(`Мат ещё можно поставить — найди ${puzzleMovesLeft() === 1 ? 'последний ход' : 'следующий ход'}.`);
     } else {
@@ -519,18 +534,30 @@
   }
 
   function showHint() {
-    if (over || thinking || !isHuman(game.turn)) return;
-    const m = mode === 'puzzle' ? matingMoves(game, puzzleMovesLeft(), true)[0] : hintMove(game);
+    if (over || thinking || !isHuman(game.turn) || puzzleSpent()) return;
+    // В задаче на ходу соперника — «Ответ»: самая упорная защита.
+    const defend = mode === 'puzzle' && game.turn !== player;
+    const m = defend ? puzzleReply()
+      : mode === 'puzzle' ? matingMoves(game, puzzleMovesLeft(), true)[0] : hintMove(game);
     if (!m) {
       if (mode === 'puzzle') setExplain('Отсюда мат уже не поставить — нажми «Заново» и начни с изначальной позиции. 💡');
       return;
     }
     select(m.from);
     hint = { from: m.from, to: m.to };
-    const name = NAMES[typeOf(m.piece)];
-    let text = `Попробуй так: ${name.nom} с ${squareName(m.from)} на ${squareName(m.to)}.`;
-    if (m.captured) text += ` Так можно съесть ${NAMES[typeOf(m.captured)].acc}!`;
-    setExplain(text + ' 💡');
+    const where = `${NAMES[typeOf(m.piece)].nom} с ${squareName(m.from)} на ${squareName(m.to)}`;
+    const promo = m.promotion ? ` и преврати пешку: ${NAMES[m.promotion].nom}` : '';
+    let text;
+    if (defend) {
+      text = `Самая упорная защита: ${where}${promo}. Можешь сходить так — или по-своему. 🛡️`;
+    } else {
+      text = `Попробуй так: ${where}${promo}.`;
+      if (m.mateIn === 1) text = `Здесь можно поставить мат! Ход: ${where}${promo}.`;
+      if (m.mateIn === 2) text = `Есть мат в 2 хода! Начни так: ${where}${promo}.`;
+      if (m.captured && !m.mateIn) text += ` Так можно съесть ${NAMES[typeOf(m.captured)].acc}!`;
+      text += ' 💡';
+    }
+    setExplain(text);
     render();
   }
 
@@ -1132,7 +1159,7 @@
     }
     const res = onSquarePress(i);
     if (res) {
-      drag = { from: i, x: e.clientX, y: e.clientY, again: res === 'again', ghost: null, pointer: e.pointerId };
+      drag = { from: i, x: e.clientX, y: e.clientY, ghost: null, pointer: e.pointerId };
       boardEl.setPointerCapture(e.pointerId);
     }
   });
@@ -1175,10 +1202,6 @@
       const m = targets.find((t) => t.to === to);
       if (m) requestMove(m, false);
       else render();
-    } else if (d.again) {
-      // Повторное нажатие на выбранную фигуру снимает выбор.
-      deselect();
-      render();
     }
   }
 
