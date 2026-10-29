@@ -22,6 +22,33 @@
   const squareName = (i) => 'abcdefgh'[i & 7] + (8 - (i >> 3));
   const squareIndex = (name) => (8 - Number(name[1])) * 8 + 'abcdefgh'.indexOf(name[0]);
 
+  // Проверяет строку FEN и возвращает её в полном виде (недостающие поля дополняются).
+  // При ошибке бросает Error с понятным объяснением по-русски.
+  function normalizeFen(text) {
+    const parts = String(text).trim().split(/\s+/);
+    if (!parts[0]) throw new Error('Строка пустая.');
+    const rows = parts[0].split('/');
+    if (rows.length !== 8) throw new Error(`Нужно 8 горизонталей через «/», а здесь ${rows.length}.`);
+    rows.forEach((row, r) => {
+      let n = 0;
+      for (const ch of row) {
+        if (/[1-8]/.test(ch)) n += Number(ch);
+        else if (/[pnbrqk]/i.test(ch)) n++;
+        else throw new Error(`Непонятный символ «${ch}» на ${8 - r}-й горизонтали.`);
+      }
+      if (n !== 8) throw new Error(`На ${8 - r}-й горизонтали ${n} клеток вместо 8.`);
+    });
+    const turn = parts[1] || 'w';
+    if (!/^[wb]$/.test(turn)) throw new Error('Чей ход: должно быть w (белые) или b (чёрные).');
+    const castling = parts[2] || '-';
+    if (!/^(-|K?Q?k?q?)$/.test(castling)) throw new Error('Рокировка: допустимы только K, Q, k, q или «-».');
+    const ep = parts[3] || '-';
+    if (!/^(-|[a-h][36])$/.test(ep)) throw new Error('Взятие на проходе: нужна клетка на 3-й или 6-й горизонтали или «-».');
+    const half = parts[4] || '0', full = parts[5] || '1';
+    if (!/^\d+$/.test(half) || !/^\d+$/.test(full)) throw new Error('Номера ходов в конце должны быть числами.');
+    return [parts[0], turn, castling, ep, half, Math.max(1, Number(full))].join(' ');
+  }
+
   class Chess {
     constructor(fen = START_FEN) {
       this.load(fen);
@@ -44,6 +71,40 @@
       this.history = [];
       this.log = [];
       this.positions = [this.positionKey()];
+    }
+
+    // Убирает права на рокировку и взятие на проходе, которые не подходят к расстановке.
+    sanitize() {
+      const b = this.board;
+      const need = { K: [60, 'K', 63, 'R'], Q: [60, 'K', 56, 'R'], k: [4, 'k', 7, 'r'], q: [4, 'k', 0, 'r'] };
+      this.castling = [...this.castling].filter((c) => {
+        const [ks, k, rs, r] = need[c];
+        return b[ks] === k && b[rs] === r;
+      }).join('');
+      if (this.ep >= 0) {
+        // Пешка соперника только что прошла через клетку ep на две клетки вперёд.
+        const dir = this.turn === 'w' ? 8 : -8;
+        const pawn = this.turn === 'w' ? 'p' : 'P';
+        const row = this.ep >> 3;
+        if ((this.turn === 'w' ? row !== 2 : row !== 5) || b[this.ep] || b[this.ep - dir] ||
+            b[this.ep + dir] !== pawn) this.ep = -1;
+      }
+      this.positions = [this.positionKey()];
+    }
+
+    // Почему по этой позиции нельзя играть; пустой список — всё в порядке.
+    problems() {
+      const list = [];
+      const count = (p) => this.board.filter((x) => x === p).length;
+      if (count('K') !== 1) list.push('Нужен ровно один белый король.');
+      if (count('k') !== 1) list.push('Нужен ровно один чёрный король.');
+      if (this.board.some((p, i) => p && typeOf(p) === 'p' && (i < 8 || i >= 56))) {
+        list.push('Пешки не могут стоять на первой и последней горизонтали.');
+      }
+      if (!list.length && this.inCheck(other(this.turn))) {
+        list.push(`Королю ${this.turn === 'w' ? 'чёрных' : 'белых'} шах, а ходят ${this.turn === 'w' ? 'белые' : 'чёрные'} — так не бывает.`);
+      }
+      return list;
     }
 
     clone() {
@@ -284,7 +345,7 @@
     }
   }
 
-  const api = { Chess, START_FEN, VALUE, colorOf, typeOf, other, squareName, squareIndex };
+  const api = { Chess, START_FEN, VALUE, colorOf, typeOf, other, squareName, squareIndex, normalizeFen };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ChessEngine = api;
 })(this);

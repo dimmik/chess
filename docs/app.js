@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const { Chess, VALUE, colorOf, typeOf, other, squareName } = window.ChessEngine;
+  const { Chess, START_FEN, colorOf, typeOf, other, squareName, normalizeFen } = window.ChessEngine;
   const { chooseMove, hintMove } = window.ChessAI;
 
   const NAMES = {
@@ -24,10 +24,14 @@
   };
 
   const LEVEL_NAMES = { baby: 'Малыш 🐣', easy: 'Новичок 🐰', medium: 'Хитрый 🦊' };
+  const SIDE = {
+    w: { nom: 'белые', gen: 'белых', dat: 'белому', icon: '⚪' },
+    b: { nom: 'чёрные', gen: 'чёрных', dat: 'чёрному', icon: '⚫' },
+  };
 
   // ---------- Настройки ----------
 
-  const DEFAULTS = { color: 'w', level: 'baby', movable: true, moves: true, danger: true, sound: true };
+  const DEFAULTS = { mode: 'computer', color: 'w', level: 'baby', movable: true, moves: true, danger: true, sound: true };
   const settings = { ...DEFAULTS };
   try {
     Object.assign(settings, JSON.parse(localStorage.getItem('kids-chess-settings') || '{}'));
@@ -39,8 +43,13 @@
   // ---------- Состояние ----------
 
   let game = new Chess();
-  let player = settings.color;
+  let mode = settings.mode;      // 'computer' — против компьютера, 'both' — ребёнок ходит за обе стороны
+  let player = settings.color;   // за кого играет ребёнок против компьютера
   let level = settings.level;
+  let orientation = player;      // чьи фигуры внизу доски
+  let startFen = START_FEN;      // с какой позиции началась партия
+  let setupFen = null;           // своя позиция для следующей партии (null — обычная расстановка)
+  let editing = null;            // редактор позиции: { game, tool, castling, ep }
   let selected = -1;
   let targets = [];        // разрешённые ходы выбранной фигуры
   let hint = null;         // { from, to }
@@ -60,7 +69,10 @@
     return `<svg class="${cls} ${c}" viewBox="0 0 100 100" aria-hidden="true"><path d="${PIECE_PATHS[typeOf(p)]}"/></svg>`;
   }
 
-  const flipped = () => player === 'b';
+  // Кто ходит сам, а за кого ходит компьютер.
+  const isHuman = (c) => mode === 'both' || c === player;
+
+  const flipped = () => orientation === 'b';
   // Индекс клетки по её месту на экране (0 — левый верхний угол) и обратно.
   const squareAt = (d) => (flipped() ? 63 - d : d);
   const displayRow = (i) => (flipped() ? 7 - (i >> 3) : i >> 3);
@@ -78,7 +90,8 @@
   }
 
   function render(anim) {
-    const myTurn = !over && !thinking && game.turn === player;
+    if (editing) { renderEditor(); return; }
+    const myTurn = !over && !thinking && isHuman(game.turn);
     const myMoves = myTurn ? game.moves() : [];
     const movableFrom = new Set(myMoves.map((m) => m.from));
     const checkSq = game.inCheck() ? game.kingSquare(game.turn) : -1;
@@ -111,8 +124,8 @@
         if (settings.danger && t.danger) mcls.push('danger');
         html += `<span class="${mcls.join(' ')}"></span>`;
       }
-      if (settings.danger && myTurn && p && colorOf(p) === player && typeOf(p) !== 'k' &&
-          game.isAttacked(i, other(player))) {
+      if (settings.danger && myTurn && p && colorOf(p) === game.turn && typeOf(p) !== 'k' &&
+          game.isAttacked(i, other(game.turn))) {
         html += '<span class="attacked-badge" title="Эту фигуру могут съесть">!</span>';
       }
       el.innerHTML = html;
@@ -140,25 +153,28 @@
 
   const displayIndex = (i) => (flipped() ? 63 - i : i);
 
+  function sideInfo(side) {
+    if (mode === 'both') return { avatar: SIDE[side].icon, name: cap(SIDE[side].nom) };
+    if (side === player) return { avatar: '🧒', name: 'Ты' };
+    return { avatar: '🤖', name: `Компьютер · ${LEVEL_NAMES[level]}` };
+  }
+
   function renderBars() {
-    const comp = other(player);
-    const top = { side: comp, avatar: '🤖', name: `Компьютер · ${LEVEL_NAMES[level]}` };
-    const bottom = { side: player, avatar: '🧒', name: 'Ты' };
     // Съеденные фигуры показываем у того, кто их съел.
     const eaten = { w: [], b: [] };
     for (const m of game.log) if (m.captured) eaten[colorOf(m.piece)].push(m.captured);
     const order = 'qrbnp';
-    const adv = game.material() * (player === 'w' ? 1 : -1);
 
-    for (const [pos, info] of [['top', top], ['bottom', bottom]]) {
+    for (const [pos, side] of [['top', other(orientation)], ['bottom', orientation]]) {
+      const info = sideInfo(side);
       $(`avatar-${pos}`).textContent = info.avatar;
       $(`name-${pos}`).textContent = info.name;
-      const list = eaten[info.side].slice().sort((a, b) => order.indexOf(typeOf(a)) - order.indexOf(typeOf(b)));
+      const list = eaten[side].slice().sort((a, b) => order.indexOf(typeOf(a)) - order.indexOf(typeOf(b)));
       let html = list.map((p) => pieceSvg(p, 'cap')).join('');
-      const myAdv = info.side === player ? adv : -adv;
-      if (myAdv > 0) html += `<span class="adv">+${myAdv}</span>`;
+      const adv = game.material() * (side === 'w' ? 1 : -1);
+      if (adv > 0) html += `<span class="adv">+${adv}</span>`;
       $(`captured-${pos}`).innerHTML = html;
-      $(`bar-${pos}`).classList.toggle('active', !over && game.turn === info.side);
+      $(`bar-${pos}`).classList.toggle('active', !over && game.turn === side);
     }
   }
 
@@ -173,6 +189,18 @@
   }
 
   function idleStatus() {
+    if (mode === 'both') {
+      if (game.inCheck()) {
+        setStatus(`Шах ${SIDE[game.turn].dat} королю! ⚠️`, 'alert');
+        setExplain(`Короля ${SIDE[game.turn].gen} хотят съесть. Уведи его, закрой другой фигурой или съешь того, кто нападает.`);
+      } else {
+        setStatus(`Ход ${SIDE[game.turn].gen} ${SIDE[game.turn].icon}`);
+        if (!$('explain').textContent) {
+          setExplain('Ты ходишь и за белых, и за чёрных. Нажми на фигуру, которая светится зелёным.');
+        }
+      }
+      return;
+    }
     if (game.inCheck()) {
       setStatus('Шах! ⚠️ Спаси своего короля!', 'alert');
       setExplain('Твоего короля хотят съесть. Убери его в безопасное место, закрой другой фигурой или съешь того, кто нападает.');
@@ -192,9 +220,10 @@
     selected = i;
     hint = hint && hint.from === i ? hint : null;
     targets = game.moves(i).filter((m) => !m.promotion || m.promotion === 'q');
+    const me = game.turn;
     for (const m of targets) {
       game.makeMove(m);
-      m.danger = game.isAttacked(m.to, other(player));
+      m.danger = game.isAttacked(m.to, other(me));
       game.undo();
     }
     const t = typeOf(game.board[i]);
@@ -209,14 +238,14 @@
   const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
   function onSquarePress(i) {
-    if (over || thinking || game.turn !== player) return false;
+    if (over || thinking || !isHuman(game.turn)) return false;
     const p = game.board[i];
     const target = targets.find((m) => m.to === i);
     if (selected >= 0 && target) {
       playerMove(target);
       return false;
     }
-    if (p && colorOf(p) === player) {
+    if (p && colorOf(p) === game.turn) {
       if (game.moves(i).length === 0) {
         deselect();
         setExplain(`${cap(NAMES[typeOf(p)].nom)}: сейчас этой фигуре некуда ходить. Выбери другую!`);
@@ -230,7 +259,8 @@
       return wasSelected ? 'again' : true;
     }
     if (p) {
-      setExplain(`Это фигура компьютера — ${NAMES[typeOf(p)].nom}. ${HOW_MOVES[typeOf(p)]}`);
+      const whose = mode === 'both' ? `Сейчас ход ${SIDE[game.turn].gen}, а это` : 'Это фигура компьютера —';
+      setExplain(`${whose} ${NAMES[typeOf(p)].nom}. ${HOW_MOVES[typeOf(p)]}`);
     }
     deselect();
     render();
@@ -246,10 +276,11 @@
   function playerMove(m, animate = true) {
     deselect();
     hint = null;
+    const who = mode === 'both' ? cap(SIDE[game.turn].nom) : 'Ты';
     game.makeMove(m);
     sound(m.captured ? 'capture' : 'move');
     let text = '';
-    if (m.captured) text = `Здорово! Ты съел ${NAMES[typeOf(m.captured)].acc}! 🎉`;
+    if (m.captured) text = `Здорово! ${who} ${mode === 'both' ? 'съели' : 'съел'} ${NAMES[typeOf(m.captured)].acc}! 🎉`;
     if (m.promotion) text = 'Ура! Пешка дошла до конца доски и стала ферзём! 👑';
     if (m.flag === 'k' || m.flag === 'q') text = 'Это рокировка: король спрятался, а ладья вышла в игру. 🏰';
     setExplain(text);
@@ -263,7 +294,7 @@
       finish();
       return;
     }
-    if (game.turn !== player) {
+    if (!isHuman(game.turn)) {
       thinking = true;
       render(anim);
       setStatus('Компьютер думает… 🤔');
@@ -298,6 +329,7 @@
   }
 
   function canUndo() {
+    if (mode === 'both') return game.log.length > 0;
     return game.log.some((m) => colorOf(m.piece) === player);
   }
 
@@ -305,9 +337,9 @@
     if (!canUndo()) return;
     if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
     thinking = false;
-    // Откатываем до последнего хода игрока включительно.
+    // Откатываем до последнего хода игрока включительно (вдвоём — ровно один ход).
     let m;
-    do { m = game.undo(); } while (m && colorOf(m.piece) !== player);
+    do { m = game.undo(); } while (m && mode !== 'both' && colorOf(m.piece) !== player);
     over = null;
     deselect();
     hint = null;
@@ -318,7 +350,7 @@
   }
 
   function showHint() {
-    if (over || thinking || game.turn !== player) return;
+    if (over || thinking || !isHuman(game.turn)) return;
     const m = hintMove(game);
     if (!m) return;
     select(m.from);
@@ -333,10 +365,16 @@
   // ---------- Конец игры ----------
 
   function finish() {
-    const won = over.result === player;
-    const lost = over.result === other(player);
+    const both = mode === 'both';
+    const won = over.result === player || (both && over.result !== 'draw');
+    const lost = !both && over.result === other(player);
     let emoji, title, text;
-    if (won) {
+    if (won && both) {
+      emoji = '🏆'; title = `Мат! Победили ${SIDE[over.result].nom}`;
+      text = `Королю ${SIDE[other(over.result)].gen} некуда деться. Можно вернуть ход и поискать другое решение.`;
+      confetti();
+      sound('win');
+    } else if (won) {
       emoji = '🏆'; title = 'Ты победил!';
       text = 'Мат! Королю компьютера некуда деться. Ты настоящий шахматист!';
       confetti();
@@ -380,51 +418,296 @@
 
   // ---------- Новая игра ----------
 
-  function newGame(color, lvl) {
+  function newGame(m, color, lvl, fen) {
     if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+    mode = m;
     player = color;
     level = lvl;
-    settings.color = color;
-    settings.level = lvl;
+    Object.assign(settings, { mode, color, level });
     saveSettings();
-    game = new Chess();
+    startFen = fen || START_FEN;
+    game = new Chess(startFen);
+    orientation = mode === 'both' ? game.turn : player;
     over = null;
     thinking = false;
     hint = null;
     deselect();
     $('gameover').hidden = true;
     setExplain('');
-    if (player === 'b') {
-      setExplain('Белые ходят первыми. Сейчас ходит компьютер.');
-      afterMove(null);
-    } else {
-      render();
-      idleStatus();
+    if (!isHuman(game.turn)) {
+      setExplain(`Сейчас ходят ${SIDE[game.turn].nom} — первым ходит компьютер.`);
     }
+    afterMove(null);
   }
 
   function openSetup() {
     $('gameover').hidden = true;
-    let color = player, lvl = level;
+    let m = mode, color = player, lvl = level;
     const sync = () => {
+      document.querySelectorAll('#choose-mode .level').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
       document.querySelectorAll('#choose-color .choice').forEach((b) => b.classList.toggle('on', b.dataset.color === color));
       document.querySelectorAll('#choose-level .level').forEach((b) => b.classList.toggle('on', b.dataset.level === lvl));
+      $('computer-options').hidden = m === 'both';
+      $('pos-name').textContent = setupFen ? 'своя ✏️' : 'обычная';
+      $('btn-pos-reset').hidden = !setupFen;
+      const first = setupFen ? setupFen.split(' ')[1] : 'w';
+      document.querySelectorAll('#choose-color small').forEach((el) => {
+        const now = el.dataset.first === first;
+        el.textContent = setupFen ? (now ? 'ходят сейчас' : 'ходят следом') : (now ? 'ходят первыми' : 'ходят вторыми');
+      });
     };
+    document.querySelectorAll('#choose-mode .level').forEach((b) => {
+      b.onclick = () => { m = b.dataset.mode; sync(); };
+    });
     document.querySelectorAll('#choose-color .choice').forEach((b) => {
       b.onclick = () => { color = b.dataset.color; sync(); };
     });
     document.querySelectorAll('#choose-level .level').forEach((b) => {
       b.onclick = () => { lvl = b.dataset.level; sync(); };
     });
+    $('btn-pos-reset').onclick = () => { setupFen = null; sync(); };
+    $('btn-pos-edit').onclick = () => openEditor(setupFen || game.fen());
     $('btn-start').onclick = () => {
       $('setup').hidden = true;
       unlockAudio();
-      newGame(color, lvl);
+      newGame(m, color, lvl, setupFen);
     };
     $('btn-continue').hidden = !(game.log.length && !over);
     $('btn-continue').onclick = () => { $('setup').hidden = true; };
     sync();
     $('setup').hidden = false;
+  }
+
+  // Кнопка «Новая игра»: если играли со своей позиции, предлагаем её же.
+  function newGameDialog() {
+    setupFen = startFen === START_FEN ? null : startFen;
+    openSetup();
+  }
+
+  // ---------- Редактор позиции ----------
+
+  const PALETTE = ['K', 'Q', 'R', 'B', 'N', 'P', 'x', 'k', 'q', 'r', 'b', 'n', 'p'];
+
+  function openEditor(fen) {
+    if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+    thinking = false;
+    $('setup').hidden = true;
+    $('gameover').hidden = true;
+    const g = new Chess(fen);
+    editing = { game: g, tool: editing ? editing.tool : 'P', castling: g.castling, ep: g.ep };
+    deselect();
+    hint = null;
+    $('play-ui').hidden = true;
+    $('edit-ui').hidden = false;
+    boardEl.classList.add('editing');
+    document.body.classList.add('editing');
+    setStatus('✏️ Расставь фигуры');
+    setExplain('Выбери фигуру и нажимай на клетки доски. Нажмёшь ещё раз — фигура исчезнет. ' +
+      'Фигуры на доске можно перетаскивать, а если утащить за доску — они уберутся.');
+    renderPalette();
+    editChanged();
+  }
+
+  function closeEditor() {
+    editing = null;
+    $('play-ui').hidden = false;
+    $('edit-ui').hidden = true;
+    boardEl.classList.remove('editing');
+    document.body.classList.remove('editing');
+  }
+
+  function renderPalette() {
+    $('palette').innerHTML = PALETTE.map((t) => {
+      if (t === 'x') return '<button class="tool eraser" data-tool="x" title="Ластик">🧽<small>убрать</small></button>';
+      const name = `${colorOf(t) === 'w' ? 'Белый' : 'Чёрный'} ${NAMES[typeOf(t)].nom}`;
+      return `<button class="tool${colorOf(t) === 'b' ? ' dark-bg' : ''}" data-tool="${t}" title="${name}" aria-label="${name}">` +
+        `${pieceSvg(t, 'pal')}</button>`;
+    }).join('');
+    syncPalette();
+  }
+
+  function syncPalette() {
+    document.querySelectorAll('#palette .tool').forEach((b) => {
+      const on = b.dataset.tool === editing.tool;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on);
+    });
+  }
+
+  // FEN позиции в редакторе: права на рокировку и взятие на проходе — только если подходят к расстановке.
+  function editFen() {
+    const g = editing.game;
+    g.castling = editing.castling;
+    g.ep = editing.ep;
+    g.sanitize();
+    return g.fen();
+  }
+
+  function editChanged(syncInput = true) {
+    const fen = editFen();
+    if (syncInput) {
+      $('fen-input').value = fen;
+      setFenMsg('');
+    }
+    const g = editing.game;
+    const problems = g.problems();
+    if (!problems.length) {
+      const o = g.outcome();
+      if (o && o.reason === 'checkmate') problems.push(`Здесь уже мат ${SIDE[g.turn].dat} королю — ходить некуда.`);
+      else if (o && o.reason === 'stalemate') problems.push(`Здесь пат: ${SIDE[g.turn].dat} королю некуда ходить.`);
+      else if (o) problems.push('Здесь уже ничья — слишком мало фигур.');
+    }
+    $('edit-problems').innerHTML = problems.map((t) => `<li>${t}</li>`).join('');
+    $('edit-done').disabled = problems.length > 0;
+    document.querySelectorAll('#edit-turn button').forEach((b) => b.classList.toggle('on', b.dataset.turn === g.turn));
+    renderEditor();
+  }
+
+  function renderEditor() {
+    const b = editing.game.board;
+    for (let d = 0; d < 64; d++) {
+      const i = squareAt(d);
+      const r = displayRow(i), c = displayCol(i);
+      squares[d].className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+      let html = '';
+      if (c === 0) html += `<span class="coord rank">${8 - (i >> 3)}</span>`;
+      if (r === 7) html += `<span class="coord file">${'abcdefgh'[i & 7]}</span>`;
+      if (b[i]) html += pieceSvg(b[i]);
+      squares[d].innerHTML = html;
+    }
+    for (const [pos, side] of [['top', other(orientation)], ['bottom', orientation]]) {
+      $(`avatar-${pos}`).textContent = SIDE[side].icon;
+      $(`name-${pos}`).textContent = cap(SIDE[side].nom);
+      $(`captured-${pos}`).innerHTML = '';
+      $(`bar-${pos}`).classList.toggle('active', editing.game.turn === side);
+    }
+  }
+
+  function applyTool(i) {
+    const b = editing.game.board, t = editing.tool;
+    if (t === 'x' || b[i] === t) {
+      b[i] = null;
+    } else {
+      // Король может быть только один — переставляем его.
+      if (t === 'K' || t === 'k') {
+        const old = b.indexOf(t);
+        if (old >= 0) b[old] = null;
+      }
+      b[i] = t;
+    }
+    editing.ep = -1;
+    editChanged();
+  }
+
+  function moveEditPiece(from, to) {
+    const b = editing.game.board;
+    const p = b[from];
+    b[from] = null;
+    if (to >= 0) b[to] = p;
+    editing.ep = -1;
+    editChanged();
+  }
+
+  function setFenMsg(text, bad) {
+    $('fen-msg').textContent = text;
+    $('fen-msg').classList.toggle('bad', !!bad);
+    $('fen-input').classList.toggle('bad', !!bad);
+  }
+
+  function loadFenText(text) {
+    if (!text.trim()) { setFenMsg(''); return false; }
+    try {
+      const g = new Chess(normalizeFen(text));
+      editing.game = g;
+      editing.castling = g.castling;
+      editing.ep = g.ep;
+      editChanged(false);
+      setFenMsg('✓ Позиция загружена');
+      return true;
+    } catch (err) {
+      setFenMsg(err.message, true);
+      return false;
+    }
+  }
+
+  function setupEditorControls() {
+    $('palette').onclick = (e) => {
+      const b = e.target.closest('.tool');
+      if (!b) return;
+      editing.tool = b.dataset.tool;
+      syncPalette();
+    };
+    document.querySelectorAll('#edit-turn button').forEach((b) => {
+      b.onclick = () => { editing.game.turn = b.dataset.turn; editChanged(); };
+    });
+    $('edit-start').onclick = () => {
+      editing.game = new Chess(START_FEN);
+      editing.castling = 'KQkq';
+      editing.ep = -1;
+      editChanged();
+    };
+    $('edit-clear').onclick = () => {
+      // Короли остаются: без них играть нельзя.
+      const old = editing.game.board;
+      const g = new Chess('8/8/8/8/8/8/8/8 ' + editing.game.turn);
+      for (const k of ['K', 'k']) {
+        const at = old.indexOf(k);
+        const home = k === 'K' ? 60 : 4;
+        g.board[at >= 0 ? at : g.board[home] ? g.board.indexOf(null) : home] = k;
+      }
+      editing.game = g;
+      editing.ep = -1;
+      editChanged();
+    };
+    $('edit-flip').onclick = () => { orientation = other(orientation); renderEditor(); };
+
+    let fenTimer = null;
+    $('fen-input').addEventListener('input', () => {
+      clearTimeout(fenTimer);
+      fenTimer = setTimeout(() => loadFenText($('fen-input').value), 350);
+    });
+    $('fen-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); clearTimeout(fenTimer); loadFenText($('fen-input').value); }
+    });
+    $('fen-input').addEventListener('focus', () => $('fen-input').select());
+
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      $('fen-paste').hidden = false;
+      $('fen-paste').onclick = async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          $('fen-input').value = text.trim();
+          loadFenText(text);
+        } catch (e) {
+          setFenMsg('Не получилось прочитать буфер обмена — вставь позицию в поле вручную.', true);
+        }
+      };
+    }
+    $('fen-copy').onclick = async () => {
+      const fen = editFen();
+      $('fen-input').value = fen;
+      try {
+        await navigator.clipboard.writeText(fen);
+      } catch (e) {
+        $('fen-input').select();
+        document.execCommand('copy');
+      }
+      setFenMsg('📋 Скопировано');
+    };
+
+    $('edit-cancel').onclick = () => {
+      closeEditor();
+      over = null;
+      setExplain('');
+      afterMove(null);
+    };
+    $('edit-done').onclick = () => {
+      if ($('edit-done').disabled) return;
+      setupFen = editFen();
+      closeEditor();
+      render();
+      openSetup();
+    };
   }
 
   // ---------- Звук ----------
@@ -474,6 +757,11 @@
     if (!sq) return;
     unlockAudio();
     const i = squareAt(Number(sq.dataset.d));
+    if (editing) {
+      drag = { from: i, x: e.clientX, y: e.clientY, ghost: null, pointer: e.pointerId, edit: true };
+      boardEl.setPointerCapture(e.pointerId);
+      return;
+    }
     const res = onSquarePress(i);
     if (res) {
       drag = { from: i, x: e.clientX, y: e.clientY, again: res === 'again', ghost: null, pointer: e.pointerId };
@@ -485,8 +773,10 @@
     if (!drag || e.pointerId !== drag.pointer) return;
     if (!drag.ghost) {
       if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
+      const piece = (editing ? editing.game : game).board[drag.from];
+      if (!piece) return;
       const wrap = document.createElement('div');
-      wrap.innerHTML = pieceSvg(game.board[drag.from], 'drag-ghost');
+      wrap.innerHTML = pieceSvg(piece, 'drag-ghost');
       drag.ghost = wrap.firstChild;
       document.body.appendChild(drag.ghost);
       const src = squares[displayIndex(drag.from)].querySelector('.piece');
@@ -500,6 +790,17 @@
     if (!drag || e.pointerId !== drag.pointer) return;
     const d = drag;
     drag = null;
+    if (d.edit) {
+      if (!editing) { if (d.ghost) d.ghost.remove(); return; }
+      if (d.ghost) {
+        d.ghost.remove();
+        // Утащили за доску — фигура убирается; отмена жеста — возвращается на место.
+        moveEditPiece(d.from, cancelled ? d.from : squareFromPoint(e.clientX, e.clientY));
+      } else if (!cancelled) {
+        applyTool(d.from);
+      }
+      return;
+    }
     if (d.ghost) {
       d.ghost.remove();
       const to = cancelled ? -1 : squareFromPoint(e.clientX, e.clientY);
@@ -521,8 +822,11 @@
   $('btn-undo').onclick = undoMove;
   $('btn-go-undo').onclick = undoMove;
   $('btn-hint').onclick = showHint;
-  $('btn-new').onclick = openSetup;
-  $('btn-again').onclick = openSetup;
+  $('btn-new').onclick = newGameDialog;
+  $('btn-again').onclick = newGameDialog;
+  $('btn-edit').onclick = () => openEditor(game.fen());
+  $('btn-flip').onclick = () => { orientation = other(orientation); render(); };
+  setupEditorControls();
   // Клик мимо окна «конец игры» закрывает его, чтобы посмотреть на доску.
   $('gameover').onclick = (e) => { if (e.target === $('gameover')) $('gameover').hidden = true; };
 
@@ -534,7 +838,7 @@
       saveSettings();
       if (selected >= 0) select(selected);
       render();
-      if (!over && !thinking && game.turn === player) idleStatus();
+      if (!editing && !over && !thinking && isHuman(game.turn)) idleStatus();
     };
   }
 
