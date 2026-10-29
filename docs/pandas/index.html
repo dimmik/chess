@@ -112,6 +112,13 @@
     }
     .ring { fill: none; stroke: #ffd84d; stroke-width: 0.9; stroke-dasharray: 2 1.2; }
     .ring.show { animation: ring-in 0.4s ease-out; }
+    /* Подсказка посильнее: красный круг и указатель. */
+    .hint-ring { fill: rgba(255, 59, 48, 0.12); stroke: #ff3b30; stroke-width: 1.1; pointer-events: none;
+      transform-box: fill-box; transform-origin: center; animation: hint-pulse 0.8s ease-in-out infinite; }
+    .hint-ring.soft { stroke-dasharray: 2.2 1.4; }
+    @keyframes hint-pulse { 50% { transform: scale(1.18); stroke-width: 1.6; } }
+    .hint-finger { pointer-events: none; transform-box: fill-box; transform-origin: center; animation: finger 0.7s ease-in-out infinite; }
+    @keyframes finger { 50% { transform: translateY(18%); } }
     @keyframes ring-in { from { opacity: 0; } }
 
     .pop {
@@ -456,6 +463,7 @@
       hit.found = true;
       foundCount++;
       hit.el.classList.remove('hint');
+      clearHint(hit);
       hit.el.classList.add('found');
       // Найденную панду выносим вперёд и обводим.
       svg.appendChild(hit.el);
@@ -470,14 +478,43 @@
       }
     });
 
+    // Подсказка нарастает: 1 — панда качается, 2 — ещё и красный круг на время,
+    // 3 и дальше — красный круг и указатель 👇 остаются, пока панду не найдут.
+    let hintTarget = null;
     $('btn-hint').onclick = () => {
-      const p = pandas.find((x) => !x.found);
-      if (!p || busy) return;
+      if (busy) return;
+      if (!hintTarget || hintTarget.found) hintTarget = pandas.find((x) => !x.found);
+      const p = hintTarget;
+      if (!p) return;
+      p.hints = (p.hints || 0) + 1;
       p.el.classList.remove('hint');
       void p.el.getBoundingClientRect();
       p.el.classList.add('hint');
       setTimeout(() => p.el.classList.remove('hint'), 1500);
+      if (p.hints >= 2) {
+        if (!p.hintRing) p.hintRing = el('circle', { class: 'hint-ring soft', cx: p.x, cy: p.y, r: p.r * 1.7 }, svg);
+        svg.appendChild(p.hintRing);
+        clearTimeout(p.hintTimer);
+        if (p.hints === 2) {
+          p.hintTimer = setTimeout(() => { if (p.hintRing) { p.hintRing.remove(); p.hintRing = null; } }, 4000);
+        } else {
+          p.hintRing.classList.remove('soft');
+          if (!p.finger) {
+            const fy = Math.max(p.y - p.r * 1.8 - 3, 8);
+            p.finger = el('text', { class: 'hint-finger', x: p.x, y: fy, 'font-size': Math.max(p.r * 1.6, 7), 'text-anchor': 'middle' }, svg);
+            p.finger.textContent = '👇';
+          }
+          svg.appendChild(p.finger);
+        }
+      }
+      tone(520, 0, 0.1, 'sine', 0.08);
     };
+
+    function clearHint(p) {
+      clearTimeout(p.hintTimer);
+      if (p.hintRing) { p.hintRing.remove(); p.hintRing = null; }
+      if (p.finger) { p.finger.remove(); p.finger = null; }
+    }
 
     // ---------- Конец уровня ----------
     function levelDone() {
