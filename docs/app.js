@@ -81,6 +81,15 @@
   const displayRow = (i) => (flipped() ? 7 - (i >> 3) : i >> 3);
   const displayCol = (i) => (flipped() ? 7 - (i & 7) : i & 7);
 
+  // Планки над и под доской показывают, с какой стороны белые, а с какой чёрные.
+  function renderEdges() {
+    for (const [id, side] of [['edge-top', other(orientation)], ['edge-bottom', orientation]]) {
+      const el = $(id);
+      el.className = `edge ${id === 'edge-top' ? 'at-top' : 'at-bottom'} ${side}`;
+      el.textContent = SIDE[side].nom;
+    }
+  }
+
   function buildBoard() {
     boardEl.innerHTML = '';
     for (let d = 0; d < 64; d++) {
@@ -114,6 +123,7 @@
   }
 
   function render(anim) {
+    renderEdges();
     if (editing) { renderEditor(); return; }
     const myTurn = !over && !thinking && isHuman(game.turn);
     const myMoves = myTurn ? game.moves() : [];
@@ -221,6 +231,7 @@
       if (adv > 0 && mode !== 'puzzle') html += `<span class="adv">+${adv}</span>`;
       $(`captured-${pos}`).innerHTML = html;
       $(`bar-${pos}`).classList.toggle('active', !over && game.turn === side);
+      $(`bar-${pos}`).classList.toggle('side-b', side === 'b');
     }
   }
 
@@ -991,6 +1002,7 @@
   }
 
   function renderEditor() {
+    renderEdges();
     const b = editing.game.board;
     for (let d = 0; d < 64; d++) {
       const i = squareAt(d);
@@ -1007,6 +1019,7 @@
       $(`name-${pos}`).textContent = cap(SIDE[side].nom);
       $(`captured-${pos}`).innerHTML = '';
       $(`bar-${pos}`).classList.toggle('active', editing.game.turn === side);
+      $(`bar-${pos}`).classList.toggle('side-b', side === 'b');
     }
   }
 
