@@ -168,6 +168,7 @@
       cursor: pointer;
       box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
     }
+    a.btn { display: inline-block; text-decoration: none; }
     .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark); }
     .btn:active { transform: translateY(2px); box-shadow: none; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
@@ -214,6 +215,7 @@
       <p id="shelf-text"></p>
       <div class="shelf" id="shelf-list"></div>
       <div class="actions">
+        <a class="btn" href="../">♟️ Шахматы</a>
         <button class="btn btn-primary" id="btn-shelf-close">Играть дальше</button>
       </div>
       <button class="link" id="btn-reset">начать с первого уровня</button>
