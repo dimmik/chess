@@ -53,4 +53,5 @@ Workflow `.github/workflows/pages.yml` при каждом пуше в `master` 
 - `docs/engine.js` — правила шахмат;
 - `docs/ai.js` — компьютерный соперник;
 - `docs/app.js` — интерфейс;
-- `docs/pieces.js` — контуры фигур из шрифта DejaVu Sans.
+- `docs/pieces.js` — контуры фигур из шрифта DejaVu Sans;
+- `docs/version.js` — номер версии (виден в «⚙️ Помощники»); увеличивайте при каждом изменении сайта.
