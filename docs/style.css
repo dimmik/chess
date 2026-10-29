@@ -647,3 +647,11 @@ body.fs .layout, body.app .layout { padding-top: max(10px, env(safe-area-inset-t
 .mini-board .mb-d { fill: var(--dark); }
 .mini-board .mb-w { fill: #fff; stroke: #26222b; stroke-width: 4; stroke-linejoin: round; paint-order: stroke; }
 .mini-board .mb-b { fill: #26222b; }
+/* Узкий телефон: подписи кнопок чуть мельче, чтобы «Подсказка» помещалась целиком. */
+@media (max-width: 400px) {
+  .tb .lbl { font-size: 11px; letter-spacing: -0.3px; }
+}
+@media (max-width: 340px) {
+  .toolbar { gap: 4px; }
+  .tb .lbl { font-size: 10px; }
+}
