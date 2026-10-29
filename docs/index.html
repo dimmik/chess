@@ -47,8 +47,10 @@
       <div class="play-ui" id="play-ui">
         <div class="toolbar">
           <button class="tb" id="btn-undo" title="Вернуть ход"><span class="ico">↩️</span><span class="lbl">Назад</span></button>
+          <button class="tb" id="btn-restart" title="Изначальная позиция" hidden><span class="ico">⏮️</span><span class="lbl">Заново</span></button>
           <button class="tb" id="btn-hint" title="Подсказка"><span class="ico">💡</span><span class="lbl">Подсказка</span></button>
           <button class="tb tb-primary" id="btn-new" title="Новая игра с прошлыми настройками"><span class="ico">✨</span><span class="lbl">Новая</span></button>
+          <button class="tb tb-primary" id="btn-check" title="Проверить решение" hidden><span class="ico">✅</span><span class="lbl">Проверить</span></button>
           <button class="tb" id="btn-puzzles" title="Задачи на мат"><span class="ico">🧩</span><span class="lbl">Задачи</span></button>
           <button class="tb" id="btn-menu" title="Меню"><span class="ico">☰</span><span class="lbl">Ещё</span></button>
         </div>
@@ -148,6 +150,7 @@
     <div class="modal">
       <h2>Меню</h2>
       <div class="menu-grid">
+        <button class="btn" id="btn-menu-new">✨ Новая игра</button>
         <button class="btn" id="btn-settings">⚙️ Настройки игры</button>
         <button class="btn" id="btn-edit">✏️ Расставить позицию</button>
         <button class="btn" id="btn-flip">🔄 Перевернуть доску</button>

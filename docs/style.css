@@ -345,6 +345,7 @@ body {
 .tb .lbl { font-size: 12px; font-weight: 800; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .tb:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12); }
 .tb:disabled { opacity: 0.4; cursor: default; }
+.tb[hidden] { display: none; }
 .tb-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark), 0 4px 12px rgba(255, 138, 61, 0.3); }
 
 /* Меню «Ещё». */
