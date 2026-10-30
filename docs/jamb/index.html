@@ -612,7 +612,8 @@
 
     // ---------- Настройка ----------
     function openSetup() {
-      $('menu').hidden = true;
+      // Закрываем остальные окна — иначе окно результатов остаётся поверх настроек.
+      for (const id of ['menu', 'over', 'rules', 'handoff']) $(id).hidden = true;
       $('name0').value = setup.name0;
       [1, 2].forEach((k) => { $(`name${k}`).value = setup.opp[k - 1].name; });
       const sync = () => {
