@@ -60,10 +60,11 @@
     .sheet-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 10px; -webkit-overflow-scrolling: touch; }
     .view-note { text-align: center; font-size: 13px; font-weight: 700; color: var(--muted); padding: 2px 0 4px; }
     table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 3px 12px rgba(0,0,0,.08); }
-    th, td { height: 27px; padding: 0 4px; text-align: center; border-bottom: 1px solid var(--line); font-size: 15px; }
-    th { font-size: 12px; color: var(--muted); font-weight: 800; background: #f4f8f7; height: 30px; line-height: 1.1; }
-    th .ci { display: block; font-size: 16px; color: var(--ink); }
-    td.lb { text-align: left; font-weight: 800; padding-left: 10px; white-space: nowrap; font-size: 14px; width: 26%; }
+    /* Высота строк (--rh) и шрифт (--fs) подбираются в fitSheet(), чтобы весь лист помещался на экране. */
+    th, td { height: var(--rh, 27px); padding: 0 4px; text-align: center; border-bottom: 1px solid var(--line); font-size: var(--fs, 15px); line-height: 1; }
+    th { font-size: calc(var(--fs, 15px) - 3px); color: var(--muted); font-weight: 800; background: #f4f8f7; line-height: 1.05; }
+    th .ci { display: block; font-size: calc(var(--fs, 15px) + 1px); color: var(--ink); }
+    td.lb { text-align: left; font-weight: 800; padding-left: 10px; white-space: nowrap; font-size: calc(var(--fs, 15px) - 1px); width: 26%; }
     td.v { font-weight: 800; }
     td.cell { cursor: default; }
     td.can { cursor: pointer; color: #9aa9a5; font-weight: 700; background: #f2fbf6; box-shadow: inset 0 0 0 2px #bfe8cf; }
@@ -74,10 +75,10 @@
     td.announced { background: #fff3c4; }
     td.just { animation: flash 1.2s; }
     @keyframes flash { 0%, 40% { background: #ffe08a; } }
-    tr.calc td { background: #f4f8f7; color: var(--muted); font-size: 14px; }
+    tr.calc td { background: #f4f8f7; color: var(--muted); font-size: calc(var(--fs, 15px) - 1px); }
     tr.calc td.lb { color: var(--muted); }
-    tr.total td { background: #e7f3ef; font-weight: 900; font-size: 15px; color: var(--ink); }
-    tr.grand td { background: var(--felt); color: #fff; font-weight: 900; font-size: 16px; height: 32px; }
+    tr.total td { background: #e7f3ef; font-weight: 900; font-size: var(--fs, 15px); color: var(--ink); }
+    tr.grand td { background: var(--felt); color: #fff; font-weight: 900; font-size: calc(var(--fs, 15px) + 1px); }
 
     /* ---------- Кубики и кнопки ---------- */
     .dock { padding: 6px 10px max(10px, env(safe-area-inset-bottom)); }
@@ -106,20 +107,20 @@
     .btn[hidden] { display: none; }
 
     @media (max-height: 700px) {
-      th, td { height: 23px; font-size: 13px; }
-      td.lb { font-size: 12.5px; }
       .die { width: 46px; height: 46px; padding: 6px; }
       .die i { width: 8px; height: 8px; }
       .btn { padding: 10px; font-size: 16px; }
       .status { min-height: 2.4em; font-size: 14px; }
     }
+    /* Телефон в альбомной ориентации: лист слева во всю высоту, игроки и кубики справа. */
     @media (orientation: landscape) and (max-height: 520px) {
-      body { flex-direction: row; flex-wrap: wrap; }
-      .bar, .players { width: 100%; }
-      .bar { padding-top: 4px; }
-      .sheet-wrap { width: 58%; height: calc(var(--vh) - 96px); flex: none; }
-      .dock { width: 42%; display: flex; flex-direction: column; justify-content: center; }
+      body { display: grid; grid-template-columns: 58% 42%; grid-template-rows: auto auto 1fr; }
+      .bar { grid-column: 2; grid-row: 1; padding-top: 4px; }
+      .players { grid-column: 2; grid-row: 2; }
+      .sheet-wrap { grid-column: 1; grid-row: 1 / 4; padding-top: 6px; padding-bottom: 6px; }
+      .dock { grid-column: 2; grid-row: 3; display: flex; flex-direction: column; justify-content: center; }
     }
+    .dice[hidden] { display: none; }
 
     /* ---------- Окна ---------- */
     .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(15, 40, 35, .45); z-index: 10; animation: fade .2s; }
@@ -320,7 +321,23 @@
       renderSheet();
       renderDice();
       renderDock();
+      fitSheet();
     }
+
+    // Подбираем высоту строк так, чтобы весь лист помещался без прокрутки.
+    function fitSheet() {
+      const wrap = document.querySelector('.sheet-wrap');
+      const rows = $('sheet').rows.length;
+      if (!rows) return;
+      const note = $('view-note').hidden ? 0 : $('view-note').offsetHeight;
+      const cs = getComputedStyle(wrap);
+      const avail = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - note - 2;
+      const rh = Math.max(15, Math.min(30, Math.floor(avail / rows) - 1));
+      const fs = Math.max(10, Math.min(15, Math.round(rh * 0.6)));
+      document.documentElement.style.setProperty('--rh', rh + 'px');
+      document.documentElement.style.setProperty('--fs', fs + 'px');
+    }
+    window.addEventListener('resize', () => requestAnimationFrame(fitSheet));
 
     function renderPlayers() {
       $('players').innerHTML = game.players.map((p, i) =>
@@ -396,6 +413,15 @@
     function setStatus(t) { $('status').textContent = t; }
 
     function renderDock() {
+      // Игра окончена: кубики не нужны, вместо броска — новая игра.
+      $('dice').hidden = !!game.over;
+      if (game.over) {
+        $('btn-announce').hidden = true;
+        $('btn-roll').disabled = false;
+        $('btn-roll').textContent = '✨ Новая игра';
+        setStatus('Игра окончена! 🏁');
+        return;
+      }
       const human = isMyTurnHuman() && !busy;
       const left = 3 - game.rollNo;
       const must = J.mustAnnounce(cur().sheet, game.cols) && !game.announced;
@@ -476,9 +502,10 @@
       if (winner.type !== 'ai') confetti();
       sound('win');
       $('over').hidden = false;
-      setStatus('Игра окончена. Новая — в меню ☰.');
       game.over = true;
       save();
+      renderDock();
+      fitSheet();
     }
 
     // ---------- Компьютер ----------
@@ -526,6 +553,7 @@
 
     // ---------- Нажатия ----------
     $('btn-roll').onclick = () => {
+      if (game && game.over) { openSetup(); return; }
       if (busy || !isMyTurnHuman() || game.rollNo >= 3) return;
       unlockAudio();
       roll();
@@ -673,7 +701,6 @@
       view = game.current;
       if (game.over) {
         render();
-        setStatus('Игра окончена. Новая — в меню ☰.');
       } else if (cur().type === 'ai') {
         startTurn(true); // ход компьютера начинаем заново
       } else {
