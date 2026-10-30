@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ямб</title>
+  <meta name="description" content="Сербский ямб: игра в кости с компьютерными соперниками или с друзьями за одним устройством.">
+  <meta name="theme-color" content="#2f7d6d">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎲</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1f3a35;
+      --muted: #5b726d;
+      --accent: #ff8a3d;
+      --accent-dark: #e8701f;
+      --felt: #2f7d6d;
+      --card: #fff;
+      --line: #dfe8e5;
+      --hl: #fff3c4;
+      --vh: 100vh;
+      color-scheme: light;
+    }
+    @supports (height: 100dvh) { :root { --vh: 100dvh; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      height: var(--vh);
+      display: flex;
+      flex-direction: column;
+      font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #e3f4ef, #fff8e6);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+    button { font: inherit; }
+
+    /* ---------- Шапка и игроки ---------- */
+    .bar { display: flex; align-items: center; gap: 8px; padding: max(8px, env(safe-area-inset-top)) 10px 4px; }
+    .title { font-weight: 900; font-size: 20px; flex: 1; }
+    .icon-btn { border: none; background: #fff; border-radius: 12px; padding: 7px 11px; font-size: 18px; cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.08); }
+    .players { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; padding: 4px 10px 6px; }
+    .chip {
+      display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 12px; border: 2px solid transparent;
+      background: #fff; cursor: pointer; min-width: 0; box-shadow: 0 2px 6px rgba(0,0,0,.06);
+    }
+    .chip .av { font-size: 20px; line-height: 1; }
+    .chip .nm { font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+    .chip .sc { font-weight: 900; font-size: 15px; }
+    .chip.turn { border-color: var(--accent); background: #fff6ee; }
+    .chip.viewing { box-shadow: 0 0 0 2px var(--felt) inset; }
+
+    /* ---------- Лист ---------- */
+    .sheet-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 10px; -webkit-overflow-scrolling: touch; }
+    .view-note { text-align: center; font-size: 13px; font-weight: 700; color: var(--muted); padding: 2px 0 4px; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 3px 12px rgba(0,0,0,.08); }
+    th, td { height: 27px; padding: 0 4px; text-align: center; border-bottom: 1px solid var(--line); font-size: 15px; }
+    th { font-size: 12px; color: var(--muted); font-weight: 800; background: #f4f8f7; height: 30px; line-height: 1.1; }
+    th .ci { display: block; font-size: 16px; color: var(--ink); }
+    td.lb { text-align: left; font-weight: 800; padding-left: 10px; white-space: nowrap; font-size: 14px; width: 26%; }
+    td.v { font-weight: 800; }
+    td.cell { cursor: default; }
+    td.can { cursor: pointer; color: #9aa9a5; font-weight: 700; background: #f2fbf6; box-shadow: inset 0 0 0 2px #bfe8cf; }
+    td.can.zero { color: #d08b8b; background: #fff6f6; box-shadow: inset 0 0 0 2px #f1d0d0; }
+    td.sel { background: var(--accent) !important; color: #fff !important; box-shadow: none !important; font-weight: 900; animation: pulse 0.9s infinite; }
+    @keyframes pulse { 50% { filter: brightness(1.12); } }
+    td.pick { cursor: pointer; background: #fff3c4; box-shadow: inset 0 0 0 2px #f2c94c; }
+    td.announced { background: #fff3c4; }
+    td.just { animation: flash 1.2s; }
+    @keyframes flash { 0%, 40% { background: #ffe08a; } }
+    tr.calc td { background: #f4f8f7; color: var(--muted); font-size: 14px; }
+    tr.calc td.lb { color: var(--muted); }
+    tr.total td { background: #e7f3ef; font-weight: 900; font-size: 15px; color: var(--ink); }
+    tr.grand td { background: var(--felt); color: #fff; font-weight: 900; font-size: 16px; height: 32px; }
+
+    /* ---------- Кубики и кнопки ---------- */
+    .dock { padding: 6px 10px max(10px, env(safe-area-inset-bottom)); }
+    .status { text-align: center; font-weight: 800; font-size: 15px; min-height: 2.6em; display: grid; place-items: center; line-height: 1.3; padding: 0 4px; }
+    .dice { display: flex; justify-content: center; gap: 10px; margin: 4px 0 8px; }
+    .die {
+      width: 54px; height: 54px; border-radius: 12px; background: #fff; border: none; padding: 7px;
+      display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+      box-shadow: 0 4px 0 #c9d6d2, 0 6px 12px rgba(0,0,0,.12); cursor: pointer; position: relative; transition: transform .15s;
+    }
+    .die i { width: 10px; height: 10px; border-radius: 50%; place-self: center; }
+    .die i.on { background: #23332f; }
+    .die.blank { background: #eef3f1; box-shadow: 0 4px 0 #d7e1de; cursor: default; }
+    .die.held { transform: translateY(-6px); background: #fff3c4; box-shadow: 0 0 0 3px var(--accent), 0 8px 12px rgba(0,0,0,.18); }
+    .die.held::after { content: '🔒'; position: absolute; right: -6px; top: -10px; font-size: 14px; }
+    .die.rolling { animation: shake .4s; }
+    @keyframes shake { 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg) translateY(-4px); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(6deg); } }
+    .actions { display: flex; gap: 8px; }
+    .btn {
+      flex: 1; border: none; border-radius: 14px; padding: 12px 10px; font-weight: 900; font-size: 17px; cursor: pointer;
+      background: #fff; color: var(--ink); box-shadow: 0 3px 0 rgba(0,0,0,.12);
+    }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark); }
+    .btn:disabled { opacity: .45; cursor: default; }
+    .btn:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+    .btn[hidden] { display: none; }
+
+    @media (max-height: 700px) {
+      th, td { height: 23px; font-size: 13px; }
+      td.lb { font-size: 12.5px; }
+      .die { width: 46px; height: 46px; padding: 6px; }
+      .die i { width: 8px; height: 8px; }
+      .btn { padding: 10px; font-size: 16px; }
+      .status { min-height: 2.4em; font-size: 14px; }
+    }
+    @media (orientation: landscape) and (max-height: 520px) {
+      body { flex-direction: row; flex-wrap: wrap; }
+      .bar, .players { width: 100%; }
+      .bar { padding-top: 4px; }
+      .sheet-wrap { width: 58%; height: calc(var(--vh) - 96px); flex: none; }
+      .dock { width: 42%; display: flex; flex-direction: column; justify-content: center; }
+    }
+
+    /* ---------- Окна ---------- */
+    .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(15, 40, 35, .45); z-index: 10; animation: fade .2s; }
+    .overlay[hidden] { display: none; }
+    @keyframes fade { from { opacity: 0; } }
+    .modal { width: min(100%, 440px); max-height: calc(var(--vh) - 32px); overflow: auto; background: #fff; border-radius: 22px; padding: 20px 18px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+    .modal h2 { margin: 2px 0 8px; font-size: 24px; }
+    .modal p { color: var(--muted); margin: 6px 0 12px; }
+    .field { text-align: left; margin: 10px 0; }
+    .field label { display: block; font-weight: 800; margin-bottom: 5px; }
+    .field input { width: 100%; font: inherit; font-weight: 700; padding: 9px 12px; border: 2px solid var(--line); border-radius: 12px; }
+    .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin-bottom: 6px; }
+    .seg button { border: 2px solid var(--line); background: #f7faf9; border-radius: 12px; padding: 8px 4px; font-weight: 800; font-size: 14px; cursor: pointer; color: var(--ink); }
+    .seg button.on { border-color: var(--accent); background: #fff3ea; }
+    .modal .actions { margin-top: 14px; }
+    /* Кнопки внизу окна видны всегда, даже если окно прокручивается. */
+    .modal > .actions:last-child { position: sticky; bottom: -20px; margin-bottom: -20px; padding: 10px 0 20px; background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 12px); }
+    .rules { text-align: left; font-size: 15px; line-height: 1.45; }
+    .rules h3 { margin: 12px 0 4px; font-size: 16px; }
+    .rules ul { margin: 4px 0; padding-left: 20px; }
+    .results { list-style: none; padding: 0; margin: 10px 0; text-align: left; }
+    .results li { display: flex; justify-content: space-between; padding: 8px 12px; border-radius: 12px; font-weight: 800; font-size: 17px; }
+    .results li:first-child { background: #fff3c4; }
+    .menu-list { display: grid; gap: 8px; }
+    .menu-list .btn, .menu-list a.btn { display: block; text-decoration: none; text-align: center; }
+    .toast { position: fixed; left: 50%; top: 96px; transform: translateX(-50%); background: rgba(31, 58, 53, .92); color: #fff; padding: 8px 14px; border-radius: 12px; font-weight: 800; font-size: 14px; z-index: 5; pointer-events: none; max-width: 90vw; text-align: center; animation: fade .2s; }
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 20; overflow: hidden; }
+    #confetti span { position: absolute; top: -40px; font-size: 26px; animation: fall linear forwards; }
+    @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <span class="title">🎲 Ямб</span>
+    <button class="icon-btn" id="btn-rules" title="Правила">❓</button>
+    <button class="icon-btn" id="btn-menu" title="Меню">☰</button>
+  </header>
+  <nav class="players" id="players"></nav>
+
+  <main class="sheet-wrap">
+    <div class="view-note" id="view-note" hidden></div>
+    <table id="sheet"></table>
+  </main>
+
+  <section class="dock">
+    <div class="status" id="status"></div>
+    <div class="dice" id="dice"></div>
+    <div class="actions">
+      <button class="btn" id="btn-announce" hidden>📣 Объявить</button>
+      <button class="btn btn-primary" id="btn-roll">🎲 Бросить</button>
+    </div>
+  </section>
+
+  <div class="overlay" id="setup" hidden>
+    <div class="modal">
+      <h2>🎲 Новая игра</h2>
+      <div class="field"><label for="name0">Как тебя зовут?</label><input id="name0" maxlength="14"></div>
+      <div class="field"><label>Соперник 1</label>
+        <div class="seg" data-opp="1"><button data-t="ai">🤖 Компьютер</button><button data-t="human">🧑 Человек</button><button data-t="none">✖ Нет</button></div>
+        <input id="name1" maxlength="14">
+      </div>
+      <div class="field"><label>Соперник 2</label>
+        <div class="seg" data-opp="2"><button data-t="ai">🤖 Компьютер</button><button data-t="human">🧑 Человек</button><button data-t="none">✖ Нет</button></div>
+        <input id="name2" maxlength="14">
+      </div>
+      <div class="field"><label>Партия</label>
+        <div class="seg" id="seg-mode"><button data-m="full">Полная · 4 столбца</button><button data-m="quick">Быстрая · 1 столбец</button></div>
+      </div>
+      <p style="font-size:14px">«Человек» — играет за этим же устройством: в свой ход передайте телефон или планшет.</p>
+      <div class="actions"><button class="btn" id="btn-setup-cancel">Отмена</button><button class="btn btn-primary" id="btn-start">Играть!</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="handoff" hidden>
+    <div class="modal">
+      <div style="font-size:60px">🤝</div>
+      <h2 id="handoff-title">Ход: Маша</h2>
+      <p>Передай устройство и нажми «Я готов».</p>
+      <div class="actions"><button class="btn btn-primary" id="btn-ready">Я готов!</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="over" hidden>
+    <div class="modal">
+      <div style="font-size:64px" id="over-emoji">🏆</div>
+      <h2 id="over-title">Игра окончена</h2>
+      <ol class="results" id="results"></ol>
+      <div class="actions"><button class="btn" id="btn-over-close">Посмотреть листы</button><button class="btn btn-primary" id="btn-over-new">Новая игра</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="menu" hidden>
+    <div class="modal">
+      <h2>Меню</h2>
+      <div class="menu-list">
+        <button class="btn btn-primary" id="btn-new">✨ Новая игра</button>
+        <a class="btn" href="../">♟️ Шахматы</a>
+        <a class="btn" href="../pandas/">🐼 Найди панд</a>
+        <button class="btn" id="btn-menu-close">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="rules" hidden>
+    <div class="modal">
+      <h2>Правила ямба</h2>
+      <div class="rules">
+        <p>В свой ход бросаешь 5 кубиков до 3 раз. Нажми на кубик, чтобы оставить его (🔒), остальные перебрасываются. Потом запиши результат в одну клетку своего листа — или зачеркни клетку (0).</p>
+        <h3>Строки</h3>
+        <ul>
+          <li><b>1–6</b> — сумма кубиков с этим числом. Если сумма 1–6 в столбце 60 и больше — бонус +30.</li>
+          <li><b>Макс</b> и <b>Мин</b> — сумма всех кубиков. Ниже считается <b>Δ = (Макс − Мин) × единицы</b>.</li>
+          <li><b>Кента</b> — 1-2-3-4-5 или 2-3-4-5-6: 66 с первого броска, 56 со второго, 46 с третьего.</li>
+          <li><b>Трилинг</b> — три одинаковых: 3 × число + 20.</li>
+          <li><b>Фул</b> — три одинаковых и два одинаковых: сумма + 30.</li>
+          <li><b>Покер</b> — четыре одинаковых: 4 × число + 40.</li>
+          <li><b>Ямб</b> — пять одинаковых: 5 × число + 50.</li>
+        </ul>
+        <h3>Столбцы</h3>
+        <ul>
+          <li><b>↓</b> — заполняется только сверху вниз, <b>↑</b> — только снизу вверх.</li>
+          <li><b>Св</b> (свободный) — в любом порядке.</li>
+          <li><b>Об</b> (объява) — сразу после первого броска нажми «📣 Объявить» и выбери строку; в конце хода запишешь только туда.</li>
+        </ul>
+        <p>Когда все листы заполнены, побеждает тот, у кого больше очков.</p>
+      </div>
+      <div class="actions"><button class="btn btn-primary" id="btn-rules-close">Понятно</button></div>
+    </div>
+  </div>
+
+  <div id="confetti" aria-hidden="true"></div>
+
+  <script src="jamb.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const J = window.Jamb;
+    const $ = (id) => document.getElementById(id);
+
+    const ROW_NAME = { 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', max: 'Макс', min: 'Мин', kenta: 'Кента', triling: 'Трилинг', ful: 'Фул', poker: 'Покер', jamb: 'Ямб' };
+    const COL = {
+      down: { icon: '↓', name: 'вниз' }, up: { icon: '↑', name: 'вверх' },
+      free: { icon: '✱', name: 'свободный' }, announce: { icon: '📣', name: 'объява' },
+    };
+    const COL_SHORT = { down: '', up: '', free: 'Св', announce: 'Об' };
+    const AVATAR = { me: '🧒', human: '🧑', ai: '🤖' };
+    const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+
+    // ---------- Состояние ----------
+    let setup = { name0: 'Я', opp: [{ type: 'ai', name: 'Вася' }, { type: 'ai', name: 'Петя' }], mode: 'full' };
+    try { Object.assign(setup, JSON.parse(localStorage.getItem('jamb-setup') || '{}')); } catch (e) { /* по умолчанию */ }
+    let game = null;       // { cols, players: [{name, type, sheet}], current, dice, held, rollNo, announced }
+    let view = 0;          // чей лист показан
+    let selected = null;   // клетка, выбранная первым нажатием { col, row }
+    let announcing = false; // режим выбора строки для объявы
+    let busy = false;      // ходит компьютер или крутятся кубики
+    let lastWritten = null;
+
+    const save = () => { try { localStorage.setItem('jamb-game', JSON.stringify(game)); } catch (e) { /* ничего */ } };
+    const cur = () => game.players[game.current];
+    const isMyTurnHuman = () => cur().type !== 'ai';
+
+    function newGame() {
+      const players = [{ name: setup.name0 || 'Я', type: 'me' }];
+      setup.opp.forEach((o, i) => { if (o.type !== 'none') players.push({ name: o.name || `Игрок ${i + 2}`, type: o.type }); });
+      const cols = setup.mode === 'quick' ? ['free'] : J.ALL_COLS.slice();
+      game = { cols, players: players.map((p) => ({ ...p, sheet: J.emptySheet(cols) })), current: 0 };
+      try { localStorage.setItem('jamb-setup', JSON.stringify(setup)); } catch (e) { /* ничего */ }
+      startTurn(true);
+    }
+
+    function startTurn(first) {
+      Object.assign(game, { dice: [0, 0, 0, 0, 0], held: [false, false, false, false, false], rollNo: 0, announced: null });
+      selected = null;
+      announcing = false;
+      view = game.current;
+      save();
+      render();
+      const humans = game.players.filter((p) => p.type !== 'ai').length;
+      if (cur().type === 'ai') {
+        setTimeout(aiTurn, 700);
+      } else if (humans > 1 && !first) {
+        $('handoff-title').textContent = `Ход: ${cur().name}`;
+        $('handoff').hidden = false;
+      }
+    }
+
+    // ---------- Рисование ----------
+    function render() {
+      if (!game) return;
+      renderPlayers();
+      renderSheet();
+      renderDice();
+      renderDock();
+    }
+
+    function renderPlayers() {
+      $('players').innerHTML = game.players.map((p, i) =>
+        `<div class="chip${i === game.current ? ' turn' : ''}${i === view && view !== game.current ? ' viewing' : ''}" data-i="${i}">` +
+        `<span class="av">${AVATAR[p.type]}</span><span class="nm">${esc(p.name)}</span><span class="sc">${J.total(p.sheet, game.cols)}</span></div>`).join('');
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    }
+
+    function renderSheet() {
+      const p = game.players[view];
+      const mine = view === game.current && isMyTurnHuman() && !busy;
+      const cols = game.cols;
+      $('view-note').hidden = view === game.current;
+      $('view-note').textContent = `Лист: ${p.name} — нажми на «${cur().name}», чтобы вернуться`;
+      let h = '<thead><tr><th></th>' + cols.map((c) => `<th><span class="ci">${COL[c].icon}</span>${COL_SHORT[c]}</th>`).join('') + '</tr></thead><tbody>';
+      const totals = Object.fromEntries(cols.map((c) => [c, J.columnTotals(p.sheet[c])]));
+      const cellHtml = (col, row) => {
+        const v = p.sheet[col][row];
+        const cls = ['cell'];
+        let text = '';
+        let attrs = '';
+        if (v !== null) {
+          cls.push('v');
+          text = v;
+          if (lastWritten && lastWritten.col === col && lastWritten.row === row && lastWritten.p === view) cls.push('just');
+        } else if (mine && announcing && col === 'announce') {
+          cls.push('pick');
+          text = '📣';
+          attrs = ` data-pick="${row}"`;
+        } else if (mine && game.rollNo > 0 && !announcing && J.allowed(p.sheet, col, row, game.announced)) {
+          const s = J.score(row, game.dice, game.rollNo);
+          cls.push('can');
+          if (s === 0) cls.push('zero');
+          if (selected && selected.col === col && selected.row === row) cls.push('sel');
+          text = s;
+          attrs = ` data-col="${col}" data-row="${row}"`;
+        } else if (!mine && cur().type === 'ai' && view === game.current && selected && selected.col === col && selected.row === row) {
+          // Клетка, которую выбрал компьютер, — подсвечиваем перед записью.
+          cls.push('sel');
+          text = J.score(row, game.dice, game.rollNo);
+        } else if (game.announced === row && col === 'announce' && view === game.current) {
+          cls.push('announced');
+          text = '📣';
+        }
+        return `<td class="${cls.join(' ')}"${attrs}>${text}</td>`;
+      };
+      const rowHtml = (row) => `<tr><td class="lb">${ROW_NAME[row]}</td>${cols.map((c) => cellHtml(c, row)).join('')}</tr>`;
+      for (const r of J.TOP) h += rowHtml(r);
+      h += `<tr class="calc"><td class="lb">Σ${cols.some((c) => totals[c].bonus) ? ' +30' : ''}</td>${cols.map((c) => `<td>${totals[c].top || ''}</td>`).join('')}</tr>`;
+      h += rowHtml('max') + rowHtml('min');
+      h += `<tr class="calc"><td class="lb">Δ × 1</td>${cols.map((c) => `<td>${totals[c].diffReady ? totals[c].diff : ''}</td>`).join('')}</tr>`;
+      for (const r of J.BOTTOM) h += rowHtml(r);
+      h += `<tr class="calc"><td class="lb">Σ</td>${cols.map((c) => `<td>${totals[c].bottom || ''}</td>`).join('')}</tr>`;
+      if (cols.length > 1) h += `<tr class="total"><td class="lb">Итого</td>${cols.map((c) => `<td>${totals[c].total}</td>`).join('')}</tr>`;
+      h += `<tr class="grand"><td class="lb">Всего</td><td colspan="${cols.length}">${J.total(p.sheet, cols)}</td></tr>`;
+      $('sheet').innerHTML = h + '</tbody>';
+    }
+
+    function renderDice(rolling) {
+      $('dice').innerHTML = game.dice.map((d, i) => {
+        const cls = ['die'];
+        if (!d) cls.push('blank');
+        if (game.held[i]) cls.push('held');
+        if (rolling && !game.held[i]) cls.push('rolling');
+        const pips = Array.from({ length: 9 }, (_, k) => `<i class="${d && PIPS[d].includes(k) ? 'on' : ''}"></i>`).join('');
+        return `<button class="${cls.join(' ')}" data-i="${i}" aria-label="${d ? 'Кубик ' + d : 'Кубик'}${game.held[i] ? ', оставлен' : ''}">${pips}</button>`;
+      }).join('');
+    }
+
+    function setStatus(t) { $('status').textContent = t; }
+
+    function renderDock() {
+      const human = isMyTurnHuman() && !busy;
+      const left = 3 - game.rollNo;
+      const must = J.mustAnnounce(cur().sheet, game.cols) && !game.announced;
+      $('btn-roll').disabled = !human || left === 0 || announcing || (must && game.rollNo === 1);
+      $('btn-roll').textContent = game.rollNo === 0 ? '🎲 Бросить' : left > 0 ? `🎲 Ещё раз · ${left}` : '🎲 Бросков нет';
+      const canAnnounce = human && game.cols.includes('announce') && game.rollNo === 1 && !game.announced &&
+        J.ROWS.some((r) => cur().sheet.announce[r] === null);
+      $('btn-announce').hidden = !canAnnounce;
+      $('btn-announce').textContent = announcing ? '✖ Не объявлять' : '📣 Объявить';
+      if (busy) return;
+      if (!human) return;
+      if (announcing) setStatus('Выбери строку в столбце 📣 — её и надо будет собрать.');
+      else if (game.rollNo === 0) setStatus(`Ход: ${cur().name}. Бросай кубики! 🎲`);
+      else if (must && game.rollNo === 1) setStatus('Остался только столбец 📣 — сначала объяви строку.');
+      else if (selected) setStatus(`Записать ${J.score(selected.row, game.dice, game.rollNo)} в «${ROW_NAME[selected.row]}» (${COL[selected.col].name})? Нажми клетку ещё раз.`);
+      else if (game.announced) setStatus(`Объявлено: «${ROW_NAME[game.announced]}». ${left ? 'Бросай или запиши.' : 'Запиши в 📣.'}`);
+      else if (left) setStatus('Нажми кубики, которые оставить, и бросай — или запиши результат в зелёную клетку.');
+      else setStatus('Броски кончились — выбери зелёную клетку (красная — зачеркнуть, 0).');
+    }
+
+    function toast(t) {
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.textContent = t;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2600);
+    }
+
+    // ---------- Действия ----------
+    function roll(done) {
+      busy = true;
+      game.rollNo++;
+      selected = null;
+      const frames = 6;
+      let k = 0;
+      const tick = () => {
+        game.dice = game.dice.map((d, i) => (game.held[i] && d ? d : 1 + Math.floor(Math.random() * 6)));
+        renderDice(true);
+        if (++k < frames) setTimeout(tick, 60);
+        else {
+          busy = false;
+          sound('roll');
+          save();
+          render();
+          if (done) done();
+        }
+      };
+      tick();
+    }
+
+    function write(col, row) {
+      const p = cur();
+      const v = J.score(row, game.dice, game.rollNo);
+      p.sheet[col][row] = v;
+      lastWritten = { col, row, p: game.current };
+      sound(v > 0 ? 'write' : 'zero');
+      nextTurn();
+    }
+
+    function nextTurn() {
+      if (game.players.every((p) => J.isFull(p.sheet, game.cols))) {
+        save();
+        render();
+        finish();
+        return;
+      }
+      do { game.current = (game.current + 1) % game.players.length; } while (J.isFull(cur().sheet, game.cols));
+      startTurn(false);
+    }
+
+    function finish() {
+      const ranked = game.players.map((p) => ({ p, t: J.total(p.sheet, game.cols) })).sort((a, b) => b.t - a.t);
+      const medals = ['🥇', '🥈', '🥉'];
+      $('results').innerHTML = ranked.map((r, i) => `<li><span>${medals[i] || ''} ${AVATAR[r.p.type]} ${esc(r.p.name)}</span><span>${r.t}</span></li>`).join('');
+      const winner = ranked[0].p;
+      $('over-emoji').textContent = winner.type === 'ai' ? '🤖' : '🏆';
+      $('over-title').textContent = game.players.length > 1 ? `Победил${winner.type === 'ai' ? '' : '(а)'}: ${winner.name}!` : `Твой результат: ${ranked[0].t}`;
+      if (winner.type !== 'ai') confetti();
+      sound('win');
+      $('over').hidden = false;
+      setStatus('Игра окончена. Новая — в меню ☰.');
+      game.over = true;
+      save();
+    }
+
+    // ---------- Компьютер ----------
+    function aiTurn() {
+      if (!game || cur().type !== 'ai') return;
+      busy = true;
+      render();
+      setStatus(`🤖 ${cur().name} бросает…`);
+      const step = () => {
+        roll(() => {
+          busy = true;
+          renderDock();
+          setTimeout(() => decide(0), 550);
+        });
+      };
+      const decide = (guard) => {
+        const p = cur();
+        const d = J.aiDecide(p.sheet, game.cols, game.announced, game.dice, game.rollNo);
+        if (d.announce && guard < 3) {
+          game.announced = d.announce;
+          toast(`🤖 ${p.name} объявляет «${ROW_NAME[d.announce]}» 📣`);
+          render();
+          setTimeout(() => decide(guard + 1), 600);
+          return;
+        }
+        if (d.write) {
+          selected = d.write;
+          const v = J.score(d.write.row, game.dice, game.rollNo);
+          renderSheet();
+          setStatus(`🤖 ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
+          setTimeout(() => {
+            busy = false;
+            toast(`🤖 ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
+            write(d.write.col, d.write.row);
+          }, 750);
+          return;
+        }
+        game.held = d.hold;
+        renderDice();
+        setStatus(`🤖 ${p.name} оставляет ${game.held.filter(Boolean).length ? game.dice.filter((_, i) => game.held[i]).join(', ') : 'ничего'} и бросает ещё…`);
+        setTimeout(step, 650);
+      };
+      step();
+    }
+
+    // ---------- Нажатия ----------
+    $('btn-roll').onclick = () => {
+      if (busy || !isMyTurnHuman() || game.rollNo >= 3) return;
+      unlockAudio();
+      roll();
+    };
+
+    $('btn-announce').onclick = () => {
+      announcing = !announcing;
+      selected = null;
+      render();
+    };
+
+    $('dice').onclick = (e) => {
+      const b = e.target.closest('.die');
+      if (!b || busy || !isMyTurnHuman() || game.rollNo === 0 || game.rollNo >= 3 || view !== game.current) return;
+      const i = +b.dataset.i;
+      game.held[i] = !game.held[i];
+      save();
+      renderDice();
+    };
+
+    $('sheet').onclick = (e) => {
+      if (busy || !isMyTurnHuman() || view !== game.current) return;
+      const pick = e.target.closest('[data-pick]');
+      if (pick) {
+        game.announced = pick.dataset.pick;
+        announcing = false;
+        sound('write');
+        save();
+        render();
+        return;
+      }
+      const td = e.target.closest('[data-col]');
+      if (!td) {
+        if (selected) { selected = null; render(); }
+        return;
+      }
+      const cell = { col: td.dataset.col, row: td.dataset.row };
+      if (selected && selected.col === cell.col && selected.row === cell.row) {
+        selected = null;
+        write(cell.col, cell.row);
+      } else {
+        selected = cell;
+        render();
+      }
+    };
+
+    $('players').onclick = (e) => {
+      const c = e.target.closest('.chip');
+      if (!c) return;
+      view = +c.dataset.i;
+      selected = null;
+      render();
+    };
+
+    $('btn-ready').onclick = () => { $('handoff').hidden = true; };
+
+    // ---------- Настройка ----------
+    function openSetup() {
+      $('menu').hidden = true;
+      $('name0').value = setup.name0;
+      [1, 2].forEach((k) => { $(`name${k}`).value = setup.opp[k - 1].name; });
+      const sync = () => {
+        document.querySelectorAll('.seg[data-opp]').forEach((seg) => {
+          const o = setup.opp[+seg.dataset.opp - 1];
+          seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.t === o.type));
+          $(`name${seg.dataset.opp}`).hidden = o.type === 'none';
+        });
+        document.querySelectorAll('#seg-mode button').forEach((b) => b.classList.toggle('on', b.dataset.m === setup.mode));
+      };
+      document.querySelectorAll('.seg[data-opp] button').forEach((b) => {
+        b.onclick = () => {
+          const o = setup.opp[+b.parentElement.dataset.opp - 1];
+          const was = o.type;
+          o.type = b.dataset.t;
+          // Подставляем понятное имя при смене типа, если имя было «по умолчанию».
+          const k = +b.parentElement.dataset.opp;
+          const input = $(`name${k}`);
+          const defaults = { ai: k === 1 ? 'Вася' : 'Петя', human: `Игрок ${k + 1}` };
+          if (!input.value || input.value === defaults[was]) input.value = defaults[o.type] || input.value;
+          sync();
+        };
+      });
+      document.querySelectorAll('#seg-mode button').forEach((b) => { b.onclick = () => { setup.mode = b.dataset.m; sync(); }; });
+      sync();
+      $('btn-setup-cancel').hidden = !game || !!game.over;
+      $('setup').hidden = false;
+    }
+
+    $('btn-start').onclick = () => {
+      setup.name0 = $('name0').value.trim() || 'Я';
+      [1, 2].forEach((k) => { setup.opp[k - 1].name = $(`name${k}`).value.trim(); });
+      $('setup').hidden = true;
+      $('over').hidden = true;
+      unlockAudio();
+      newGame();
+    };
+    $('btn-setup-cancel').onclick = () => { $('setup').hidden = true; };
+    $('btn-menu').onclick = () => { $('menu').hidden = false; };
+    $('btn-menu-close').onclick = () => { $('menu').hidden = true; };
+    $('btn-new').onclick = openSetup;
+    $('btn-over-new').onclick = openSetup;
+    $('btn-over-close').onclick = () => { $('over').hidden = true; };
+    $('btn-rules').onclick = () => { $('rules').hidden = false; };
+    $('btn-rules-close').onclick = () => { $('rules').hidden = true; };
+    for (const id of ['menu', 'rules', 'over']) {
+      $(id).addEventListener('click', (e) => { if (e.target === $(id)) $(id).hidden = true; });
+    }
+
+    // ---------- Звук и конфетти ----------
+    let audio = null;
+    function unlockAudio() {
+      if (audio) { if (audio.state === 'suspended') audio.resume(); return; }
+      try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; }
+    }
+    function tone(f, start, dur, type = 'triangle', vol = 0.12) {
+      if (!audio) return;
+      const t0 = audio.currentTime + start, o = audio.createOscillator(), g = audio.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.connect(g).connect(audio.destination); o.start(t0); o.stop(t0 + dur);
+    }
+    function sound(kind) {
+      if (kind === 'roll') [300, 360, 280].forEach((f, k) => tone(f, k * 0.05, 0.06, 'square', 0.04));
+      if (kind === 'write') tone(660, 0, 0.12);
+      if (kind === 'zero') tone(200, 0, 0.18, 'sine');
+      if (kind === 'win') [523, 659, 784, 1047].forEach((f, k) => tone(f, k * 0.14, 0.25, 'triangle', 0.16));
+    }
+    function confetti() {
+      const box = $('confetti');
+      const bits = ['🎉', '🎲', '⭐', '✨', '🏆'];
+      for (let k = 0; k < 36; k++) {
+        const s = document.createElement('span');
+        s.textContent = bits[k % bits.length];
+        s.style.left = Math.random() * 100 + 'vw';
+        s.style.animationDuration = 2.5 + Math.random() * 2.5 + 's';
+        s.style.animationDelay = Math.random() + 's';
+        box.appendChild(s);
+      }
+      setTimeout(() => { box.innerHTML = ''; }, 6000);
+    }
+
+    // ---------- Запуск: продолжаем сохранённую партию ----------
+    try { game = JSON.parse(localStorage.getItem('jamb-game')); } catch (e) { game = null; }
+    if (game && game.players && game.cols) {
+      view = game.current;
+      if (game.over) {
+        render();
+        setStatus('Игра окончена. Новая — в меню ☰.');
+      } else if (cur().type === 'ai') {
+        startTurn(true); // ход компьютера начинаем заново
+      } else {
+        render();
+      }
+    } else {
+      game = null;
+      openSetup();
+    }
+  })();
+  </script>
+</body>
+</html>
