@@ -30,6 +30,11 @@ assert.ok(J.allowed(s, 'announce', 'ful', 'ful') && !J.allowed(s, 'free', 'ful',
 const col = { 1: 3, 2: 6, 3: 12, 4: 16, 5: 15, 6: 18, max: 27, min: 8, kenta: 66, triling: 0, ful: 0, poker: 0, jamb: 0 };
 const t = J.columnTotals(col);
 assert.deepStrictEqual([t.top, t.bonus, t.diff, t.bottom, t.total], [100, 30, 57, 66, 223]);
+assert.deepStrictEqual([t.delta, t.ones], [19, 3]);
+// Для показа множителей: части формулы известны по отдельности, разность бывает отрицательной.
+const partial = { ...J.emptySheet(['free']).free, max: 20, min: 25 };
+assert.deepStrictEqual([J.columnTotals(partial).delta, J.columnTotals(partial).ones, J.columnTotals(partial).diffReady], [-5, null, false]);
+assert.strictEqual(J.columnTotals({ ...partial, 1: 2 }).diff, 0);
 
 // Полные партии: три компьютерных игрока, оба режима — всегда доходят до конца.
 function playGame(gameCols) {
