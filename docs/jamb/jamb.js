@@ -81,10 +81,12 @@
     const v = (r) => colSheet[r] || 0;
     const top = TOP.reduce((s, r) => s + v(r), 0);
     const bonus = top >= 60 ? 30 : 0;
-    const diffReady = colSheet.max !== null && colSheet.min !== null && colSheet['1'] !== null;
-    const diff = diffReady ? Math.max(0, (colSheet.max - colSheet.min) * colSheet['1']) : 0;
+    const delta = colSheet.max !== null && colSheet.min !== null ? colSheet.max - colSheet.min : null;
+    const ones = colSheet['1'];
+    const diffReady = delta !== null && ones !== null;
+    const diff = diffReady ? Math.max(0, delta * ones) : 0;
     const bottom = BOTTOM.reduce((s, r) => s + v(r), 0);
-    return { top: top + bonus, bonus, diff, diffReady, bottom, total: top + bonus + diff + bottom };
+    return { top: top + bonus, bonus, delta, ones, diff, diffReady, bottom, total: top + bonus + diff + bottom };
   }
 
   const total = (sheet, cols) => cols.reduce((s, col) => s + columnTotals(sheet[col]).total, 0);

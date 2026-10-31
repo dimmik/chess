@@ -77,6 +77,11 @@
     @keyframes flash { 0%, 40% { background: #ffe08a; } }
     tr.calc td { background: #f4f8f7; color: var(--muted); font-size: calc(var(--fs, 15px) - 1px); }
     tr.calc td.lb { color: var(--muted); }
+    /* Строка Δ при нескольких столбцах: сверху что на что умножаем, снизу результат. */
+    tr.two td { height: calc(var(--rh, 27px) * 2 + 1px); line-height: 1.1; }
+    tr.two .fx, tr.two .res { display: block; white-space: nowrap; }
+    tr.two .fx { font-size: calc(var(--fs, 15px) - 2px); font-weight: 700; }
+    tr.two .res { font-weight: 900; color: var(--ink); }
     tr.total td { background: #e7f3ef; font-weight: 900; font-size: var(--fs, 15px); color: var(--ink); }
     tr.grand td { background: var(--felt); color: #fff; font-weight: 900; font-size: calc(var(--fs, 15px) + 1px); }
 
@@ -245,6 +250,7 @@
         <p>Например: Макс 27, Мин 8, в строке «1» — 3 (три единицы). Δ = (27 − 8) × 3 = <b>57</b>.
           Поэтому единицы — это множитель: если в «1» записан 0, то и Δ = 0. Если Мин больше Макс — тоже 0.
           Δ появляется, когда в столбце заполнены «Макс», «Мин» и «1».</p>
+        <p>В листе видно, что на что умножается: 19 × 3 — это Макс − Мин и число в строке «1». Знак «?» — этого числа пока нет.</p>
         <h3>Столбцы</h3>
         <ul>
           <li><b>↓</b> — заполняется только сверху вниз, <b>↑</b> — только снизу вверх.</li>
@@ -327,7 +333,8 @@
     // Подбираем высоту строк так, чтобы весь лист помещался без прокрутки.
     function fitSheet() {
       const wrap = document.querySelector('.sheet-wrap');
-      const rows = $('sheet').rows.length;
+      // Двойная строка Δ занимает высоту двух обычных.
+      const rows = $('sheet').rows.length + $('sheet').querySelectorAll('tr.two').length;
       if (!rows) return;
       const note = $('view-note').hidden ? 0 : $('view-note').offsetHeight;
       const cs = getComputedStyle(wrap);
@@ -391,12 +398,30 @@
       for (const r of J.TOP) h += rowHtml(r);
       h += `<tr class="calc"><td class="lb">Σ${cols.some((c) => totals[c].bonus) ? ' +30' : ''}</td>${cols.map((c) => `<td>${totals[c].top || ''}</td>`).join('')}</tr>`;
       h += rowHtml('max') + rowHtml('min');
-      h += `<tr class="calc"><td class="lb">Δ × 1</td>${cols.map((c) => `<td>${totals[c].diffReady ? totals[c].diff : ''}</td>`).join('')}</tr>`;
+      h += deltaRow(cols, totals);
       for (const r of J.BOTTOM) h += rowHtml(r);
       h += `<tr class="calc"><td class="lb">Σ</td>${cols.map((c) => `<td>${totals[c].bottom || ''}</td>`).join('')}</tr>`;
       if (cols.length > 1) h += `<tr class="total"><td class="lb">Итого</td>${cols.map((c) => `<td>${totals[c].total}</td>`).join('')}</tr>`;
       h += `<tr class="grand"><td class="lb">Всего</td><td colspan="${cols.length}">${J.total(p.sheet, cols)}</td></tr>`;
       $('sheet').innerHTML = h + '</tbody>';
+    }
+
+    // «19 × 3»: разность Макс и Мин и число в строке «1»; чего ещё нет — «?». Пустой столбец — ''.
+    function deltaFormula(t, sep) {
+      if (t.delta === null && t.ones === null) return '';
+      const delta = t.delta === null ? '?' : String(t.delta).replace('-', '−');
+      return `${delta}${sep}×${sep}${t.ones === null ? '?' : t.ones}`;
+    }
+
+    // Один столбец: формула в подписи строки. Несколько: подпись общая, поэтому формула в каждой клетке.
+    function deltaRow(cols, totals) {
+      if (cols.length === 1) {
+        const t = totals[cols[0]];
+        const f = deltaFormula(t, ' ');
+        return `<tr class="calc"><td class="lb">Δ × 1${f ? ' = ' + f : ''}</td><td>${t.diffReady ? t.diff : ''}</td></tr>`;
+      }
+      const cell = (t) => `<td><span class="fx">${deltaFormula(t, '')}</span><span class="res">${t.diffReady ? '= ' + t.diff : ''}</span></td>`;
+      return `<tr class="calc two"><td class="lb">Δ × 1</td>${cols.map((c) => cell(totals[c])).join('')}</tr>`;
     }
 
     function renderDice(rolling) {
