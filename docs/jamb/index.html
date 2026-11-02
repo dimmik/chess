@@ -20,6 +20,7 @@
       --card: #fff;
       --line: #dfe8e5;
       --hl: #fff3c4;
+      --stripe: #fcf6e6;
       --vh: 100vh;
       color-scheme: light;
     }
@@ -67,6 +68,8 @@
     td.lb { text-align: left; font-weight: 800; padding-left: 10px; white-space: nowrap; font-size: calc(var(--fs, 15px) - 1px); width: 26%; }
     td.v { font-weight: 800; }
     td.cell { cursor: default; }
+    /* Чередование строк для записи. :where не добавляет специфичности: подсветка клеток (can, sel, pick) важнее. */
+    :where(tr.alt) td { background: var(--stripe); }
     td.can { cursor: pointer; color: #9aa9a5; font-weight: 700; background: #f2fbf6; box-shadow: inset 0 0 0 2px #bfe8cf; }
     td.can.zero { color: #d08b8b; background: #fff6f6; box-shadow: inset 0 0 0 2px #f1d0d0; }
     td.sel { background: var(--accent) !important; color: #fff !important; box-shadow: none !important; font-weight: 900; animation: pulse 0.9s infinite; }
@@ -339,7 +342,7 @@
       const note = $('view-note').hidden ? 0 : $('view-note').offsetHeight;
       const cs = getComputedStyle(wrap);
       const avail = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - note - 2;
-      const rh = Math.max(15, Math.min(30, Math.floor(avail / rows) - 1));
+      const rh = Math.max(14, Math.min(30, Math.floor(avail / rows) - 1));
       const fs = Math.max(10, Math.min(15, Math.round(rh * 0.6)));
       document.documentElement.style.setProperty('--rh', rh + 'px');
       document.documentElement.style.setProperty('--fs', fs + 'px');
@@ -394,12 +397,13 @@
         }
         return `<td class="${cls.join(' ')}"${attrs}>${text}</td>`;
       };
-      const rowHtml = (row) => `<tr><td class="lb">${ROW_NAME[row]}</td>${cols.map((c) => cellHtml(c, row)).join('')}</tr>`;
-      for (const r of J.TOP) h += rowHtml(r);
+      // Полосы считаем внутри каждого блока строк, чтобы рядом с серой строкой итогов не было цветной.
+      const rowHtml = (row, i) => `<tr${i % 2 ? ' class="alt"' : ''}><td class="lb">${ROW_NAME[row]}</td>${cols.map((c) => cellHtml(c, row)).join('')}</tr>`;
+      h += J.TOP.map(rowHtml).join('');
       h += `<tr class="calc"><td class="lb">Σ${cols.some((c) => totals[c].bonus) ? ' +30' : ''}</td>${cols.map((c) => `<td>${totals[c].top || ''}</td>`).join('')}</tr>`;
-      h += rowHtml('max') + rowHtml('min');
+      h += ['max', 'min'].map(rowHtml).join('');
       h += deltaRow(cols, totals);
-      for (const r of J.BOTTOM) h += rowHtml(r);
+      h += J.BOTTOM.map(rowHtml).join('');
       h += `<tr class="calc"><td class="lb">Σ</td>${cols.map((c) => `<td>${totals[c].bottom || ''}</td>`).join('')}</tr>`;
       if (cols.length > 1) h += `<tr class="total"><td class="lb">Итого</td>${cols.map((c) => `<td>${totals[c].total}</td>`).join('')}</tr>`;
       h += `<tr class="grand"><td class="lb">Всего</td><td colspan="${cols.length}">${J.total(p.sheet, cols)}</td></tr>`;
