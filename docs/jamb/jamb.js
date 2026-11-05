@@ -91,6 +91,53 @@
 
   const total = (sheet, cols) => cols.reduce((s, col) => s + columnTotals(sheet[col]).total, 0);
 
+  // ---------- Запись партии и повтор ----------
+  // rec = { cols, players: [{ name, type }], over, log: [ход] }, ход = { p: игрок, r: ['33356', …] — кубики
+  // после каждого броска, h: ['11100', …] — какие кубики были оставлены перед 2-м и 3-м броском,
+  // a: объявленная строка (если была), w: { c: столбец, r: строка, v: очки } — запись (у недоигранного хода нет) }.
+
+  // Листы игроков после первых turns ходов.
+  function replaySheets(rec, turns) {
+    const sheets = rec.players.map(() => emptySheet(rec.cols));
+    for (let t = 0; t < Math.min(turns, rec.log.length); t++) {
+      const { p, w } = rec.log[t];
+      if (w) sheets[p][w.c][w.r] = w.v;
+    }
+    return sheets;
+  }
+
+  // Шаги повтора: начало, каждый бросок, объява, запись; у доигранной партии в конце — итог.
+  function replaySteps(rec) {
+    const steps = [{ kind: 'start', t: -1 }];
+    rec.log.forEach((turn, t) => {
+      turn.r.forEach((_, n) => {
+        steps.push({ kind: 'roll', t, n: n + 1 });
+        if (n === 0 && turn.a) steps.push({ kind: 'announce', t });
+      });
+      if (turn.w) steps.push({ kind: 'write', t });
+    });
+    if (rec.over) steps.push({ kind: 'end', t: rec.log.length });
+    return steps;
+  }
+
+  // Что видно на шаге k: листы, чей ход, кубики (и какие были оставлены), объява.
+  function replayState(rec, steps, k) {
+    const step = steps[k];
+    const turn = rec.log[step.t];
+    const st = {
+      step, turn, sheets: replaySheets(rec, step.kind === 'write' ? step.t + 1 : step.t),
+      current: turn ? turn.p : 0, dice: [0, 0, 0, 0, 0], held: [false, false, false, false, false], rollNo: 0, announced: null,
+    };
+    if (turn && turn.r.length) {
+      const n = step.kind === 'roll' ? step.n : step.kind === 'announce' ? 1 : turn.r.length;
+      st.rollNo = n;
+      st.dice = turn.r[n - 1].split('').map(Number);
+      if (step.kind === 'roll' && n > 1) st.held = turn.h[n - 2].split('').map((c) => c === '1');
+      if (turn.a && !(step.kind === 'roll' && n === 1)) st.announced = turn.a;
+    }
+    return st;
+  }
+
   // ---------- Компьютерный игрок: простой и не слишком умный ----------
 
   // «Нормальный» результат строки: запись ниже — плохо, выше — хорошо. Зачеркнуть строку стоит её «нормы».
@@ -168,7 +215,7 @@
 
   const api = {
     ROWS, ALL_COLS, TOP, BOTTOM, DICE, score, emptySheet, isFull, mustAnnounce, allowed, allowedCells,
-    columnTotals, total, aiDecide, utility,
+    columnTotals, total, aiDecide, utility, replaySheets, replaySteps, replayState,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Jamb = api;

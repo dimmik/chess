@@ -37,22 +37,29 @@ assert.deepStrictEqual([J.columnTotals(partial).delta, J.columnTotals(partial).o
 assert.strictEqual(J.columnTotals({ ...partial, 1: 2 }).diff, 0);
 
 // Полные партии: три компьютерных игрока, оба режима — всегда доходят до конца.
+// Партия записывается так же, как в игре, и повтор должен восстановить те же листы.
 function playGame(gameCols) {
   const players = [0, 1, 2].map(() => J.emptySheet(gameCols));
+  const rec = { cols: gameCols, players: [0, 1, 2].map((i) => ({ name: 'И' + i, type: 'ai' })), log: [], over: true };
   let turns = 0;
   while (!players.every((p) => J.isFull(p, gameCols))) {
     const sheet = players[turns % 3];
+    const turn = { p: turns % 3, r: [], h: [] };
     turns++;
     if (J.isFull(sheet, gameCols)) continue;
+    rec.log.push(turn);
     let dice = [0, 0, 0, 0, 0], held = [false, false, false, false, false], announced = null, written = false;
     for (let roll = 1; roll <= 3 && !written; roll++) {
+      if (roll > 1) turn.h.push(held.map((b) => (b ? '1' : '0')).join(''));
       dice = dice.map((d, i) => (held[i] ? d : 1 + Math.floor(Math.random() * 6)));
+      turn.r.push(dice.join(''));
       for (let step = 0; step < 3; step++) {
         const d = J.aiDecide(sheet, gameCols, announced, dice, roll);
-        if (d.announce) { assert.strictEqual(roll, 1); announced = d.announce; continue; }
+        if (d.announce) { assert.strictEqual(roll, 1); announced = d.announce; turn.a = announced; continue; }
         if (d.write) {
           assert.ok(J.allowed(sheet, d.write.col, d.write.row, announced), 'запись в разрешённую клетку');
           sheet[d.write.col][d.write.row] = J.score(d.write.row, dice, roll);
+          turn.w = { c: d.write.col, r: d.write.row, v: sheet[d.write.col][d.write.row] };
           written = true;
         } else {
           assert.ok(roll < 3, 'на третьем броске надо записать');
@@ -64,6 +71,23 @@ function playGame(gameCols) {
     assert.ok(written, 'ход закончился записью');
     assert.ok(turns < 1000);
   }
+  // Повтор: на каждом шаге записи значение совпадает с очками за показанные кубики, в конце — те же листы.
+  const steps = J.replaySteps(rec);
+  assert.strictEqual(steps[0].kind, 'start');
+  assert.strictEqual(steps[steps.length - 1].kind, 'end');
+  steps.forEach((step, k) => {
+    const st = J.replayState(rec, steps, k);
+    if (step.kind === 'write') {
+      const w = st.turn.w;
+      assert.strictEqual(J.score(w.r, st.dice, st.rollNo), w.v, 'очки записи совпадают с кубиками');
+      assert.strictEqual(st.sheets[st.turn.p][w.c][w.r], w.v);
+    }
+    if (step.kind === 'roll' && step.n > 1) {
+      const prev = st.turn.r[step.n - 2].split('').map(Number);
+      st.held.forEach((h, i) => { if (h) assert.strictEqual(st.dice[i], prev[i], 'оставленный кубик не меняется'); });
+    }
+  });
+  assert.deepStrictEqual(J.replayState(rec, steps, steps.length - 1).sheets, players);
   return players.map((p) => J.total(p, gameCols));
 }
 const scores = [];

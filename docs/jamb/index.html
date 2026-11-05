@@ -130,6 +130,20 @@
     }
     .dice[hidden] { display: none; }
 
+    /* ---------- Повтор ---------- */
+    #play-actions[hidden], .replay[hidden] { display: none; }
+    .replay { display: flex; flex-direction: column; gap: 6px; }
+    .replay input[type=range] { width: 100%; margin: 2px 0; accent-color: var(--felt); }
+    .replay .ctl { display: flex; gap: 6px; }
+    .replay .ctl .btn { padding: 10px 4px; }
+    .replay .ctl .btn-primary { flex: 2.2; }
+    .view-note.rp { color: var(--felt); }
+    .hist { display: grid; gap: 8px; margin: 8px 0; text-align: left; }
+    .hist button { display: block; width: 100%; border: 2px solid var(--line); background: #f7faf9; border-radius: 14px; padding: 9px 12px; text-align: left; cursor: pointer; color: var(--ink); }
+    .hist button:active { background: #fff3ea; border-color: var(--accent); }
+    .hist .when { display: block; font-weight: 800; font-size: 13px; color: var(--muted); }
+    .hist .who { display: block; font-weight: 800; font-size: 15px; margin-top: 2px; }
+
     /* ---------- Окна ---------- */
     .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(15, 40, 35, .45); z-index: 10; animation: fade .2s; }
     .overlay[hidden] { display: none; }
@@ -176,9 +190,19 @@
   <section class="dock">
     <div class="status" id="status"></div>
     <div class="dice" id="dice"></div>
-    <div class="actions">
+    <div class="actions" id="play-actions">
       <button class="btn" id="btn-announce" hidden>📣 Объявить</button>
       <button class="btn btn-primary" id="btn-roll">🎲 Бросить</button>
+    </div>
+    <div class="replay" id="replay" hidden>
+      <input type="range" id="rp-range" min="0" max="0" value="0" aria-label="Шаг повтора">
+      <div class="ctl">
+        <button class="btn" id="rp-first" title="В начало" aria-label="В начало">⏮</button>
+        <button class="btn" id="rp-prev" title="Шаг назад" aria-label="Шаг назад">◀</button>
+        <button class="btn btn-primary" id="rp-play">▶ Смотреть</button>
+        <button class="btn" id="rp-next" title="Шаг вперёд" aria-label="Шаг вперёд">▶</button>
+        <button class="btn" id="rp-exit" title="Выйти из повтора" aria-label="Выйти из повтора">✖</button>
+      </div>
     </div>
   </section>
 
@@ -216,6 +240,7 @@
       <div style="font-size:64px" id="over-emoji">🏆</div>
       <h2 id="over-title">Игра окончена</h2>
       <ol class="results" id="results"></ol>
+      <button class="btn" id="btn-over-replay" style="width:100%">🎬 Посмотреть повтор</button>
       <div class="actions"><button class="btn" id="btn-over-close">Посмотреть листы</button><button class="btn btn-primary" id="btn-over-new">Новая игра</button></div>
     </div>
   </div>
@@ -225,6 +250,7 @@
       <h2>Меню</h2>
       <div class="menu-list">
         <button class="btn btn-primary" id="btn-new">✨ Новая игра</button>
+        <button class="btn" id="btn-history">📜 История и повторы</button>
         <a class="btn" href="../">♟️ Шахматы</a>
         <a class="btn" href="../pandas/">🐼 Найди панд</a>
         <button class="btn" id="btn-menu-close">Закрыть</button>
@@ -261,8 +287,19 @@
           <li><b>Об</b> (объява) — сразу после первого броска нажми «📣 Объявить» и выбери строку; в конце хода запишешь только туда.</li>
         </ul>
         <p>Когда все листы заполнены, побеждает тот, у кого больше очков.</p>
+        <h3>История</h3>
+        <p>Все партии сохраняются: «☰ → 📜 История и повторы». Там любую партию (и текущую) можно посмотреть заново, бросок за броском.</p>
       </div>
       <div class="actions"><button class="btn btn-primary" id="btn-rules-close">Понятно</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="history" hidden>
+    <div class="modal">
+      <h2>📜 История</h2>
+      <p style="margin-bottom:4px">Нажми на партию, чтобы посмотреть её ход за ходом.</p>
+      <div class="hist" id="hist-list"></div>
+      <div class="actions"><button class="btn" id="btn-hist-clear">🗑 Очистить</button><button class="btn btn-primary" id="btn-hist-close">Закрыть</button></div>
     </div>
   </div>
 
@@ -293,22 +330,39 @@
     let announcing = false; // режим выбора строки для объявы
     let busy = false;      // ходит компьютер или крутятся кубики
     let lastWritten = null;
+    let replay = null;     // повтор: { rec, steps, k, playing, timer, mark, live, liveView }; в это время game — снимок шага
+    let aiTimer = null;    // отложенный старт хода компьютера
+    let aiToken = 0;       // меняется — и начатый ход компьютера останавливается (например, на время повтора)
+    const OVERLAYS = ['setup', 'handoff', 'over', 'menu', 'rules', 'history'];
 
-    const save = () => { try { localStorage.setItem('jamb-game', JSON.stringify(game)); } catch (e) { /* ничего */ } };
+    const save = () => {
+      if (replay) return; // в повторе game — снимок, а не партия
+      try { localStorage.setItem('jamb-game', JSON.stringify(game)); } catch (e) { /* ничего */ }
+    };
+    // Запись текущего хода в game.log (у старых сохранённых партий записи нет).
+    const turnLog = () => (game.log ? game.log[game.log.length - 1] : null);
     const cur = () => game.players[game.current];
     const isMyTurnHuman = () => cur().type !== 'ai';
 
     function newGame() {
+      if (replay) { stopReplayTimer(); game = replay.live; replay = null; }
+      if (game && !game.over) archive(game); // недоигранная партия тоже остаётся в истории
       const players = [{ name: setup.name0 || 'Я', type: 'me' }];
       setup.opp.forEach((o, i) => { if (o.type !== 'none') players.push({ name: o.name || `Игрок ${i + 2}`, type: o.type }); });
       const cols = setup.mode === 'quick' ? ['free'] : J.ALL_COLS.slice();
-      game = { cols, players: players.map((p) => ({ ...p, sheet: J.emptySheet(cols) })), current: 0 };
+      game = { id: Date.now(), started: Date.now(), cols, players: players.map((p) => ({ ...p, sheet: J.emptySheet(cols) })), current: 0, log: [] };
       try { localStorage.setItem('jamb-setup', JSON.stringify(setup)); } catch (e) { /* ничего */ }
       startTurn(true);
     }
 
     function startTurn(first) {
       Object.assign(game, { dice: [0, 0, 0, 0, 0], held: [false, false, false, false, false], rollNo: 0, announced: null });
+      if (game.log) {
+        // Ход без записи — прерванный ход компьютера, он начинается заново.
+        const last = turnLog();
+        if (last && !last.w) game.log.pop();
+        game.log.push({ p: game.current, r: [], h: [] });
+      }
       selected = null;
       announcing = false;
       view = game.current;
@@ -316,7 +370,8 @@
       render();
       const humans = game.players.filter((p) => p.type !== 'ai').length;
       if (cur().type === 'ai') {
-        setTimeout(aiTurn, 700);
+        clearTimeout(aiTimer);
+        aiTimer = setTimeout(aiTurn, 700);
       } else if (humans > 1 && !first) {
         $('handoff-title').textContent = `Ход: ${cur().name}`;
         $('handoff').hidden = false;
@@ -361,10 +416,16 @@
 
     function renderSheet() {
       const p = game.players[view];
-      const mine = view === game.current && isMyTurnHuman() && !busy;
+      const mine = !replay && view === game.current && isMyTurnHuman() && !busy;
       const cols = game.cols;
-      $('view-note').hidden = view === game.current;
-      $('view-note').textContent = `Лист: ${p.name} — нажми на «${cur().name}», чтобы вернуться`;
+      $('view-note').classList.toggle('rp', !!replay);
+      if (replay) {
+        $('view-note').hidden = false;
+        $('view-note').textContent = `🎬 Повтор партии ${fmtDate(replay.rec.date)}${view !== game.current ? ` · лист: ${p.name}` : ''}`;
+      } else {
+        $('view-note').hidden = view === game.current;
+        $('view-note').textContent = `Лист: ${p.name} — нажми на «${cur().name}», чтобы вернуться`;
+      }
       let h = '<thead><tr><th></th>' + cols.map((c) => `<th><span class="ci">${COL[c].icon}</span>${COL_SHORT[c]}</th>`).join('') + '</tr></thead><tbody>';
       const totals = Object.fromEntries(cols.map((c) => [c, J.columnTotals(p.sheet[c])]));
       const cellHtml = (col, row) => {
@@ -376,6 +437,7 @@
           cls.push('v');
           text = v;
           if (lastWritten && lastWritten.col === col && lastWritten.row === row && lastWritten.p === view) cls.push('just');
+          if (replay && replay.mark && replay.mark.col === col && replay.mark.row === row && view === game.current) cls.push('sel');
         } else if (mine && announcing && col === 'announce') {
           cls.push('pick');
           text = '📣';
@@ -442,6 +504,9 @@
     function setStatus(t) { $('status').textContent = t; }
 
     function renderDock() {
+      $('play-actions').hidden = !!replay;
+      $('replay').hidden = !replay;
+      if (replay) { renderReplayDock(); return; }
       // Игра окончена: кубики не нужны, вместо броска — новая игра.
       $('dice').hidden = !!game.over;
       if (game.over) {
@@ -484,15 +549,23 @@
       busy = true;
       game.rollNo++;
       selected = null;
+      const g = game;
+      const heldMask = game.held.map((h) => (h ? '1' : '0')).join('');
       const frames = 6;
       let k = 0;
       const tick = () => {
+        if (game !== g) return; // начался повтор — бросок прерван
         game.dice = game.dice.map((d, i) => (game.held[i] && d ? d : 1 + Math.floor(Math.random() * 6)));
         renderDice(true);
         if (++k < frames) setTimeout(tick, 60);
         else {
           busy = false;
           sound('roll');
+          const t = turnLog();
+          if (t) {
+            if (game.rollNo > 1) t.h.push(heldMask);
+            t.r.push(game.dice.join(''));
+          }
           save();
           render();
           if (done) done();
@@ -505,6 +578,8 @@
       const p = cur();
       const v = J.score(row, game.dice, game.rollNo);
       p.sheet[col][row] = v;
+      const t = turnLog();
+      if (t) t.w = { c: col, r: row, v };
       lastWritten = { col, row, p: game.current };
       sound(v > 0 ? 'write' : 'zero');
       nextTurn();
@@ -532,6 +607,8 @@
       sound('win');
       $('over').hidden = false;
       game.over = true;
+      $('btn-over-replay').hidden = !game.log;
+      archive(game);
       save();
       renderDock();
       fitSheet();
@@ -539,22 +616,28 @@
 
     // ---------- Компьютер ----------
     function aiTurn() {
-      if (!game || cur().type !== 'ai') return;
+      if (!game || replay || cur().type !== 'ai') return;
+      const token = ++aiToken;
+      const alive = () => token === aiToken && !replay;
       busy = true;
       render();
       setStatus(`🤖 ${cur().name} бросает…`);
       const step = () => {
+        if (!alive()) return;
         roll(() => {
+          if (!alive()) return;
           busy = true;
           renderDock();
           setTimeout(() => decide(0), 550);
         });
       };
       const decide = (guard) => {
+        if (!alive()) return;
         const p = cur();
         const d = J.aiDecide(p.sheet, game.cols, game.announced, game.dice, game.rollNo);
         if (d.announce && guard < 3) {
           game.announced = d.announce;
+          if (turnLog()) turnLog().a = d.announce;
           toast(`🤖 ${p.name} объявляет «${ROW_NAME[d.announce]}» 📣`);
           render();
           setTimeout(() => decide(guard + 1), 600);
@@ -566,6 +649,7 @@
           renderSheet();
           setStatus(`🤖 ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
           setTimeout(() => {
+            if (!alive()) return;
             busy = false;
             toast(`🤖 ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
             write(d.write.col, d.write.row);
@@ -582,6 +666,7 @@
 
     // ---------- Нажатия ----------
     $('btn-roll').onclick = () => {
+      if (replay) return;
       if (game && game.over) { openSetup(); return; }
       if (busy || !isMyTurnHuman() || game.rollNo >= 3) return;
       unlockAudio();
@@ -589,6 +674,7 @@
     };
 
     $('btn-announce').onclick = () => {
+      if (replay) return;
       announcing = !announcing;
       selected = null;
       render();
@@ -596,7 +682,7 @@
 
     $('dice').onclick = (e) => {
       const b = e.target.closest('.die');
-      if (!b || busy || !isMyTurnHuman() || game.rollNo === 0 || game.rollNo >= 3 || view !== game.current) return;
+      if (!b || replay || busy || !isMyTurnHuman() || game.rollNo === 0 || game.rollNo >= 3 || view !== game.current) return;
       const i = +b.dataset.i;
       game.held[i] = !game.held[i];
       save();
@@ -604,10 +690,11 @@
     };
 
     $('sheet').onclick = (e) => {
-      if (busy || !isMyTurnHuman() || view !== game.current) return;
+      if (replay || busy || !isMyTurnHuman() || view !== game.current) return;
       const pick = e.target.closest('[data-pick]');
       if (pick) {
         game.announced = pick.dataset.pick;
+        if (turnLog()) turnLog().a = game.announced;
         announcing = false;
         sound('write');
         save();
@@ -642,7 +729,7 @@
     // ---------- Настройка ----------
     function openSetup() {
       // Закрываем остальные окна — иначе окно результатов остаётся поверх настроек.
-      for (const id of ['menu', 'over', 'rules', 'handoff']) $(id).hidden = true;
+      for (const id of OVERLAYS) $(id).hidden = true;
       $('name0').value = setup.name0;
       [1, 2].forEach((k) => { $(`name${k}`).value = setup.opp[k - 1].name; });
       const sync = () => {
@@ -688,9 +775,183 @@
     $('btn-over-close').onclick = () => { $('over').hidden = true; };
     $('btn-rules').onclick = () => { $('rules').hidden = false; };
     $('btn-rules-close').onclick = () => { $('rules').hidden = true; };
-    for (const id of ['menu', 'rules', 'over']) {
+    for (const id of ['menu', 'rules', 'over', 'history']) {
       $(id).addEventListener('click', (e) => { if (e.target === $(id)) $(id).hidden = true; });
     }
+
+    // ---------- История партий ----------
+    const HIST_KEY = 'jamb-history';
+    const HIST_MAX = 40;
+    function loadHistory() {
+      try {
+        const h = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+        return Array.isArray(h) ? h : [];
+      } catch (e) { return []; }
+    }
+    const recordOf = (g) => ({
+      id: g.id, date: g.started, cols: g.cols, over: !!g.over,
+      players: g.players.map((p) => ({ name: p.name, type: p.type })), log: g.log,
+    });
+    // Кладём партию в историю (или обновляем). Не влезает в хранилище — оставляем меньше старых партий.
+    function archive(g) {
+      if (!g || !g.id || !g.log || !g.log.some((t) => t.w)) return;
+      const h = [recordOf(g), ...loadHistory().filter((r) => r.id !== g.id)].sort((a, b) => b.date - a.date);
+      for (let n = Math.min(h.length, HIST_MAX); n > 0; n = Math.floor(n / 2)) {
+        try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0, n))); return; } catch (e) { /* меньше */ }
+      }
+    }
+    const fmtDate = (d) => new Date(d).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const ranking = (rec) => {
+      const sheets = J.replaySheets(rec, rec.log.length);
+      return rec.players.map((p, i) => ({ p, t: J.total(sheets[i], rec.cols) })).sort((a, b) => b.t - a.t);
+    };
+
+    let histItems = [];
+    function openHistory() {
+      for (const id of OVERLAYS) $(id).hidden = true;
+      const live = replay ? replay.live : game;
+      histItems = [];
+      if (live && live.id && live.log && !live.over && live.log.some((t) => t.r.length)) histItems.push({ rec: recordOf(live), now: true });
+      for (const rec of loadHistory()) if (!histItems.some((it) => it.rec.id === rec.id)) histItems.push({ rec });
+      $('hist-list').innerHTML = histItems.length ? histItems.map(({ rec, now }, i) => {
+        const tag = now ? ' · идёт сейчас' : rec.over ? '' : ' · не доиграна';
+        const who = ranking(rec).map((r, k) => `${k === 0 && rec.over && rec.players.length > 1 ? '🏆 ' : ''}${AVATAR[r.p.type]} ${esc(r.p.name)} ${r.t}`).join(' · ');
+        return `<button data-i="${i}"><span class="when">${fmtDate(rec.date)} · ${rec.cols.length > 1 ? 'полная' : 'быстрая'}${tag}</span><span class="who">${who}</span></button>`;
+      }).join('') : '<p>Пока нет сыгранных партий — они появятся здесь.</p>';
+      $('btn-hist-clear').hidden = !loadHistory().length;
+      $('history').hidden = false;
+    }
+    $('hist-list').onclick = (e) => {
+      const b = e.target.closest('[data-i]');
+      if (b) startReplay(histItems[+b.dataset.i].rec);
+    };
+    $('btn-history').onclick = openHistory;
+    $('btn-hist-close').onclick = () => { $('history').hidden = true; };
+    $('btn-hist-clear').onclick = () => {
+      if (!confirm('Удалить всю историю партий?')) return;
+      try { localStorage.removeItem(HIST_KEY); } catch (e) { /* ничего */ }
+      openHistory();
+    };
+    $('btn-over-replay').onclick = () => { if (game && game.log) startReplay(recordOf(game)); };
+
+    // ---------- Повтор ----------
+    // Пока идёт повтор, game — снимок шага (его рисуют обычные render-функции), а партия ждёт в replay.live.
+    function startReplay(rec) {
+      for (const id of OVERLAYS) $(id).hidden = true;
+      const live = replay ? replay.live : game;
+      const liveView = replay ? replay.liveView : view;
+      stopReplayTimer();
+      clearTimeout(aiTimer);
+      aiToken++; // ход компьютера останавливается и после повтора начнётся заново
+      replay = { rec, steps: J.replaySteps(rec), k: 0, playing: false, timer: null, mark: null, live, liveView };
+      busy = false;
+      selected = null;
+      announcing = false;
+      lastWritten = null;
+      showStep(0);
+    }
+
+    function showStep(k) {
+      const { rec, steps } = replay;
+      replay.k = Math.max(0, Math.min(steps.length - 1, k));
+      const st = J.replayState(rec, steps, replay.k);
+      game = {
+        cols: rec.cols, current: st.current, dice: st.dice, held: st.held, rollNo: st.rollNo, announced: st.announced,
+        players: rec.players.map((p, i) => ({ ...p, sheet: st.sheets[i] })),
+      };
+      view = st.current;
+      replay.mark = st.step.kind === 'write' ? { col: st.turn.w.c, row: st.turn.w.r } : null;
+      if (replay.playing && st.step.kind === 'roll') sound('roll');
+      if (replay.playing && st.step.kind === 'write') sound(st.turn.w.v > 0 ? 'write' : 'zero');
+      render();
+    }
+
+    function describeStep() {
+      const { rec, steps, k } = replay;
+      const step = steps[k];
+      const turn = rec.log[step.t];
+      const who = turn ? `${AVATAR[rec.players[turn.p].type]} ${rec.players[turn.p].name}` : '';
+      if (step.kind === 'start') return 'Начало партии. Жми «▶ Смотреть» или листай по шагам.';
+      if (step.kind === 'end') return '🏁 Итог: ' + ranking(rec).map((r) => `${r.p.name} ${r.t}`).join(', ');
+      if (step.kind === 'announce') return `${who} объявляет «${ROW_NAME[turn.a]}» 📣`;
+      if (step.kind === 'write') {
+        const { c, r, v } = turn.w;
+        return v > 0 ? `${who}: ${v} в «${ROW_NAME[r]}» ${COL[c].icon}` : `${who} зачёркивает «${ROW_NAME[r]}» ${COL[c].icon}`;
+      }
+      if (step.n === 1) return `${who}: первый бросок`;
+      const kept = game.dice.filter((_, i) => game.held[i]);
+      return `${who}: бросок ${step.n}, оставил ${kept.length ? kept.join(', ') : 'ничего'}`;
+    }
+
+    function renderReplayDock() {
+      const { steps, k, playing } = replay;
+      const last = steps.length - 1;
+      $('dice').hidden = steps[k].kind === 'end';
+      $('rp-range').max = last;
+      $('rp-range').value = k;
+      $('rp-first').disabled = $('rp-prev').disabled = k === 0;
+      $('rp-next').disabled = k === last;
+      $('rp-play').textContent = playing ? '⏸ Пауза' : k === last ? '↺ Сначала' : '▶ Смотреть';
+      setStatus(describeStep());
+    }
+
+    function stopReplayTimer() {
+      if (!replay) return;
+      clearTimeout(replay.timer);
+      replay.timer = null;
+      replay.playing = false;
+    }
+    function playTick() {
+      if (!replay || !replay.playing) return;
+      if (replay.k >= replay.steps.length - 1) { stopReplayTimer(); renderDock(); return; }
+      showStep(replay.k + 1);
+      replay.timer = setTimeout(playTick, replay.steps[replay.k].kind === 'write' ? 1300 : 800);
+    }
+    function goStep(k) { stopReplayTimer(); showStep(k); }
+
+    function exitReplay() {
+      if (!replay) return;
+      stopReplayTimer();
+      game = replay.live;
+      view = replay.liveView;
+      replay = null;
+      busy = false;
+      selected = null;
+      if (!game) {
+        // Партии ещё нет (повтор открыли из окна новой игры) — убираем снимок и возвращаемся к настройке.
+        for (const id of ['sheet', 'players', 'dice']) $(id).innerHTML = '';
+        $('replay').hidden = true;
+        $('play-actions').hidden = false;
+        $('view-note').hidden = true;
+        setStatus('');
+        openSetup();
+        return;
+      }
+      if (!game.over && cur().type === 'ai') startTurn(true); // прерванный ход компьютера — заново
+      else render();
+    }
+
+    $('rp-first').onclick = () => goStep(0);
+    $('rp-prev').onclick = () => goStep(replay.k - 1);
+    $('rp-next').onclick = () => goStep(replay.k + 1);
+    $('rp-range').oninput = (e) => goStep(+e.target.value);
+    $('rp-exit').onclick = exitReplay;
+    $('rp-play').onclick = () => {
+      unlockAudio();
+      if (replay.playing) { stopReplayTimer(); renderDock(); return; }
+      if (replay.k >= replay.steps.length - 1) showStep(0);
+      replay.playing = true;
+      renderDock();
+      replay.timer = setTimeout(playTick, 500);
+    };
+    // На компьютере повтор можно листать стрелками, пробел — пауза.
+    document.addEventListener('keydown', (e) => {
+      if (!replay || OVERLAYS.some((id) => !$(id).hidden) || e.target.tagName === 'INPUT') return;
+      if (e.key === 'ArrowLeft') goStep(replay.k - 1);
+      else if (e.key === 'ArrowRight') goStep(replay.k + 1);
+      else if (e.key === ' ') { e.preventDefault(); $('rp-play').click(); }
+      else if (e.key === 'Escape') exitReplay();
+    });
 
     // ---------- Звук и конфетти ----------
     let audio = null;
