@@ -66,6 +66,8 @@
     #pet .pb.eat { animation: chomp .35s infinite; }
     #pet .pb.jump { animation: jump .6s; }
     #pet .pb.shake { animation: shake .5s; }
+    #pet .pb.wash { animation: wash .5s ease-in-out infinite; }
+    @keyframes wash { 25% { transform: rotate(-7deg) translateY(-3px); } 75% { transform: rotate(7deg) translateY(-3px); } }
     #pet .pb.sleep { animation: breathe 2.4s ease-in-out infinite; }
     @keyframes breathe { 0%, 100% { transform: rotate(-10deg) scale(1, .96); } 50% { transform: rotate(-10deg) scale(1.04, 1); } }
     #night { opacity: 0; transition: opacity 1s; }
@@ -194,6 +196,7 @@
         <li>⚽ <b>Играть</b> — нажимай в разные места дома, и питомец побежит за игрушкой.</li>
         <li>🙈 <b>Прятки</b> — питомец спрячется, а ты ищи: нажимай на мебель. Иногда он прячется и сам!</li>
         <li>💬 Над питомцем появляется облачко — это просьба. Выполни её и получи ⭐.</li>
+        <li>🛁 Нажми на ванну — питомец пойдёт купаться.</li>
         <li>🛏️ Устал — нажми на кровать, и питомец ляжет спать. Если совсем устанет, уснёт сам.</li>
         <li>👋 Нажми на питомца, чтобы погладить (или разбудить).</li>
       </ul>
@@ -530,6 +533,7 @@
       if (kind === 'clean') [784, 1047, 1319].forEach((f, k) => tone(f, k * 0.07, 0.15, 'sine', 0.08));
       if (kind === 'throw') tone(440, 0, 0.12, 'sine', 0.06);
       if (kind === 'miss') tone(220, 0, 0.15, 'sine', 0.06);
+      if (kind === 'splash') tone(280 + Math.random() * 160, 0, 0.09, 'sine', 0.06);
       if (kind === 'star') [523, 659, 784, 1047].forEach((f, k) => tone(f, k * 0.11, 0.2, 'triangle', 0.12));
     }
 
@@ -787,6 +791,48 @@
       renderMeters(); renderButtons(); save();
     }
 
+    // ---------- Купание ----------
+    let bathTok = 0;
+    async function bathe() {
+      if (busy || hidden || sleeping) return;
+      const tok = ++bathTok;
+      const n = S.pet.name;
+      $('tray').hidden = true;
+      mode = null;
+      busy = true;
+      renderButtons();
+      status(`${n} идёт купаться… 🛁`);
+      const ok = await walkTo(H.TUB.x, H.TUB.floor);
+      if (!ok || tok !== bathTok) { busy = false; renderButtons(); return; }
+      // Сидит в ванне (за бортиком видна голова), вокруг пена и брызги.
+      $('hide-layer').appendChild(pet);
+      pos = { x: H.TUB.x, y: H.FLOOR_Y[H.TUB.floor] + H.TUB.dy };
+      placePet();
+      anim('wash');
+      status(`${n} купается! Плюх-плюх 🫧`, 8000);
+      for (let k = 0; k < 9; k++) {
+        fx(pos.x + rnd(-60, 60), pos.y - rnd(20, 70), k % 3 ? '🫧' : '💦', 'fx', rnd(20, 30));
+        sound('splash');
+        await sleep(520);
+        if (tok !== bathTok) return;
+      }
+      $('pet-layer').appendChild(pet);
+      pos = { x: H.TUB.x - 110, y: H.FLOOR_Y[H.TUB.floor] };
+      placePet();
+      anim('jump');
+      for (let k = 0; k < 3; k++) setTimeout(() => fx(pos.x + rnd(-28, 28), pos.y - rnd(20, 60), '✨', 'fx sparkle', 30), k * 160);
+      sound('clean');
+      say('✨');
+      hearts(2);
+      S.fun = Math.min(100, S.fun + 8);
+      if (Math.random() < 0.5) addDirt('puddle', 'bath'); // накапал
+      busy = false;
+      status(`${n} ${g('чистенький', 'чистенькая')}! ✨`);
+      nextWanderAt = Date.now() + 3000;
+      nextReqAt = Math.max(nextReqAt, Date.now() + 10000);
+      renderMeters(); renderButtons(); save();
+    }
+
     // ---------- Прятки ----------
     async function startHide(sneaky) {
       if (busy || hidden || sleeping) return;
@@ -905,6 +951,12 @@
       }
       if (mode === 'play') { throwToy(svgPoint(e)); return; }
       const f = e.target.closest('[data-f]');
+      if (f && f.dataset.f === 'tub' && !hidden) {
+        if (sleeping) return;
+        f.classList.remove('wig'); void f.getBBox(); f.classList.add('wig');
+        bathe();
+        return;
+      }
       if (f && f.dataset.f === 'bed' && !hidden) {
         if (sleeping) wakeUp(true);
         else goSleep();
@@ -954,7 +1006,9 @@
     $('btn-np-yes').onclick = () => {
       $('newpet').hidden = true;
       if (hidden) { hidden = null; $('pet-layer').appendChild(pet); }
-      if (sleeping) { clearInterval(sleeping.zzz); sleeping = null; $('night').classList.remove('on'); $('pet-layer').appendChild(pet); }
+      if (sleeping) { clearInterval(sleeping.zzz); sleeping = null; $('night').classList.remove('on'); }
+      bathTok++; // прервать купание
+      $('pet-layer').appendChild(pet);
       S.pet = H.newPet(Math.random, S.pet.type);
       Object.assign(S, { food: 70, fun: 70, energy: 80, req: null });
       mode = null; busy = false; catches = 0;

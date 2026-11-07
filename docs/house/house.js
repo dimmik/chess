@@ -57,6 +57,8 @@
   // Сон: где питомец лежит на кровати (под одеялом видна голова) и как быстро высыпается.
   const BED = { x: 152, floor: 2, dy: -56 };
   const SLEEP_GAIN = 9; // бодрости в секунду сна
+  // Купание: где питомец сидит в ванне (над бортиком видна голова).
+  const TUB = { x: 636, floor: 2, dy: -76 };
   const MAX_DIRT = 6;
   const cleanliness = (dirtCount) => Math.max(0, 100 - dirtCount * 16);
 
@@ -123,7 +125,7 @@
   }
 
   const api = {
-    FLOOR_Y, CEIL_Y, LADDER_X, X_MIN, X_MAX, ROOMS, PETS, SPOTS, DIRT, RATE, MAX_DIRT, BED, SLEEP_GAIN,
+    FLOOR_Y, CEIL_Y, LADDER_X, X_MIN, X_MAX, ROOMS, PETS, SPOTS, DIRT, RATE, MAX_DIRT, BED, SLEEP_GAIN, TUB,
     clampX, floorAt, path, petInfo, newPet, decay, cleanliness, chooseRequest, pickSpot, spotPos, randomDirt,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
