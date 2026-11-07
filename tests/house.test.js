@@ -12,15 +12,25 @@ assert.strictEqual(H.floorAt(200), 2);
 assert.strictEqual(H.floorAt(500), 1);
 
 // Потребности убывают и не уходят ниже нуля.
-const st = { food: 50, fun: 10 };
-H.decay(st, 50);
-assert.deepStrictEqual([st.food, st.fun], [40, 0]);
+const st = { food: 50, fun: 10, energy: 30 };
+H.decay(st, 60);
+assert.deepStrictEqual([st.food, st.fun, st.energy], [38, 0, 20]);
+const old = { food: 50, fun: 50 }; // сохранение до появления сна
+H.decay(old, 10);
+assert.strictEqual(old.energy, undefined);
 assert.strictEqual(H.cleanliness(0), 100);
 assert.strictEqual(H.cleanliness(20), 0);
 
 // Желания: сытый и весёлый в чистом доме только прячется; голодный чаще просит есть.
-for (let i = 0; i < 200; i++) assert.strictEqual(H.chooseRequest({ food: 100, fun: 100, dirt: 0 }), 'hide');
-const counts = { feed: 0, clean: 0, play: 0, hide: 0 };
+for (let i = 0; i < 200; i++) assert.strictEqual(H.chooseRequest({ food: 100, fun: 100, energy: 100, dirt: 0 }), 'hide');
+// Сонный просит спать, бодрый — никогда.
+const sleepy = { feed: 0, clean: 0, play: 0, sleep: 0, hide: 0 };
+for (let i = 0; i < 2000; i++) sleepy[H.chooseRequest({ food: 100, fun: 100, energy: 5, dirt: 0 })]++;
+assert.ok(sleepy.sleep > sleepy.hide * 3, JSON.stringify(sleepy));
+for (let i = 0; i < 300; i++) assert.notStrictEqual(H.chooseRequest({ food: 20, fun: 20, energy: 90, dirt: 3 }), 'sleep');
+// Кровать — в спальне.
+assert.ok(H.ROOMS.some((r) => r.id === 'bedroom' && r.floor === H.BED.floor && H.BED.x > r.x0 && H.BED.x < r.x1));
+const counts = { feed: 0, clean: 0, play: 0, sleep: 0, hide: 0 };
 for (let i = 0; i < 2000; i++) counts[H.chooseRequest({ food: 5, fun: 90, dirt: 1 })]++;
 assert.ok(counts.feed > counts.hide * 2 && counts.clean === 0 && counts.play === 0, JSON.stringify(counts));
 assert.strictEqual(H.chooseRequest({ food: 100, fun: 100, dirt: 5 }, () => 0), 'clean');
