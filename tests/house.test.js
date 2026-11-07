@@ -28,8 +28,9 @@ const sleepy = { feed: 0, clean: 0, play: 0, sleep: 0, hide: 0 };
 for (let i = 0; i < 2000; i++) sleepy[H.chooseRequest({ food: 100, fun: 100, energy: 5, dirt: 0 })]++;
 assert.ok(sleepy.sleep > sleepy.hide * 3, JSON.stringify(sleepy));
 for (let i = 0; i < 300; i++) assert.notStrictEqual(H.chooseRequest({ food: 20, fun: 20, energy: 90, dirt: 3 }), 'sleep');
-// Кровать — в спальне.
+// Кровать — в спальне, ванна — в ванной.
 assert.ok(H.ROOMS.some((r) => r.id === 'bedroom' && r.floor === H.BED.floor && H.BED.x > r.x0 && H.BED.x < r.x1));
+assert.ok(H.ROOMS.some((r) => r.id === 'bath' && r.floor === H.TUB.floor && H.TUB.x > r.x0 && H.TUB.x < r.x1));
 const counts = { feed: 0, clean: 0, play: 0, sleep: 0, hide: 0 };
 for (let i = 0; i < 2000; i++) counts[H.chooseRequest({ food: 5, fun: 90, dirt: 1 })]++;
 assert.ok(counts.feed > counts.hide * 2 && counts.clean === 0 && counts.play === 0, JSON.stringify(counts));
