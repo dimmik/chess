@@ -69,4 +69,18 @@ for (let i = 0; i < H.MAX_DIRT; i++) {
 assert.strictEqual(H.randomDirt([], Math.random, 'crumbs', 'kitchen').y, H.FLOOR_Y[1]);
 assert.ok(new Set(dirt.map((d) => d.id)).size === dirt.length);
 
+// Диван: в гостиной; занятие не повторяется подряд, гости — чаще всего.
+assert.ok(H.ROOMS.some((r) => r.id === 'living' && r.floor === H.SOFA.floor && H.SOFA.x > r.x0 && H.SOFA.x < r.x1 && H.GUEST_X < r.x1));
+const acts = {};
+let prev = null;
+for (let i = 0; i < 3000; i++) {
+  const a = H.pickActivity(Math.random, prev);
+  assert.ok(a in H.ACTIVITIES && a !== prev, a);
+  acts[a] = (acts[a] || 0) + 1;
+  prev = a;
+}
+assert.deepStrictEqual(Object.keys(acts).sort(), Object.keys(H.ACTIVITIES).sort());
+assert.ok(Object.keys(acts).every((k) => k === 'guest' || acts.guest > acts[k]), JSON.stringify(acts));
+assert.strictEqual(H.pickActivity(() => 0.999, 'music'), 'book');
+
 console.log('house ok');

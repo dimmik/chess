@@ -59,6 +59,20 @@
   const SLEEP_GAIN = 9; // бодрости в секунду сна
   // Купание: где питомец сидит в ванне (над бортиком видна голова).
   const TUB = { x: 636, floor: 2, dy: -76 };
+  // Диван: где питомец сидит; куда встаёт гость.
+  const SOFA = { x: 128, floor: 1, dy: -44 };
+  const GUEST_X = 286;
+  // Чем заняться на диване: чаще всего — приходит гость; одно и то же два раза подряд не бывает.
+  const ACTIVITIES = { guest: 4, tv: 2, popcorn: 2, book: 1, music: 1 };
+  function pickActivity(rnd = Math.random, last = null) {
+    const keys = Object.keys(ACTIVITIES).filter((k) => k !== last);
+    let r = rnd() * keys.reduce((s, k) => s + ACTIVITIES[k], 0);
+    for (const k of keys) {
+      r -= ACTIVITIES[k];
+      if (r < 0) return k;
+    }
+    return keys[keys.length - 1];
+  }
   const MAX_DIRT = 6;
   const cleanliness = (dirtCount) => Math.max(0, 100 - dirtCount * 16);
 
@@ -125,7 +139,7 @@
   }
 
   const api = {
-    FLOOR_Y, CEIL_Y, LADDER_X, X_MIN, X_MAX, ROOMS, PETS, SPOTS, DIRT, RATE, MAX_DIRT, BED, SLEEP_GAIN, TUB,
+    FLOOR_Y, CEIL_Y, LADDER_X, X_MIN, X_MAX, ROOMS, PETS, SPOTS, DIRT, RATE, MAX_DIRT, BED, SLEEP_GAIN, TUB, SOFA, GUEST_X, ACTIVITIES, pickActivity,
     clampX, floorAt, path, petInfo, newPet, decay, cleanliness, chooseRequest, pickSpot, spotPos, randomDirt,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
