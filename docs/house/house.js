@@ -47,26 +47,31 @@
     return { type: p.type, name, g };
   }
 
-  // Сытость и веселье (0–100) понемногу убывают; чистота — от количества грязи.
-  const RATE = { food: 1 / 5, fun: 1 / 4 }; // очков в секунду
+  // Сытость, веселье и бодрость (0–100) понемногу убывают; чистота — от количества грязи.
+  const RATE = { food: 1 / 5, fun: 1 / 4, energy: 1 / 6 }; // очков в секунду
   function decay(st, sec) {
     st.food = Math.max(0, st.food - sec * RATE.food);
     st.fun = Math.max(0, st.fun - sec * RATE.fun);
+    if (typeof st.energy === 'number') st.energy = Math.max(0, st.energy - sec * RATE.energy);
   }
+  // Сон: где питомец лежит на кровати (под одеялом видна голова) и как быстро высыпается.
+  const BED = { x: 152, floor: 2, dy: -56 };
+  const SLEEP_GAIN = 9; // бодрости в секунду сна
   const MAX_DIRT = 6;
   const cleanliness = (dirtCount) => Math.max(0, 100 - dirtCount * 16);
 
-  // О чём питомец попросит: чем голоднее/скучнее/грязнее, тем вероятнее; иногда — спрятаться.
+  // О чём питомец попросит: чем голоднее/скучнее/грязнее/сонливее, тем вероятнее; иногда — спрятаться.
   function chooseRequest(st, rnd = Math.random) {
     const w = {
       feed: st.food < 70 ? 110 - st.food : 0,
       clean: st.dirt >= 2 ? st.dirt * 14 : 0,
       play: st.fun < 70 ? 110 - st.fun : 0,
+      sleep: st.energy < 45 ? 130 - st.energy : 0,
       hide: 30,
     };
-    const total = w.feed + w.clean + w.play + w.hide;
+    const total = w.feed + w.clean + w.play + w.sleep + w.hide;
     let r = rnd() * total;
-    for (const k of ['feed', 'clean', 'play', 'hide']) {
+    for (const k of ['feed', 'clean', 'play', 'sleep', 'hide']) {
       r -= w[k];
       if (r < 0) return k;
     }
@@ -118,7 +123,7 @@
   }
 
   const api = {
-    FLOOR_Y, CEIL_Y, LADDER_X, X_MIN, X_MAX, ROOMS, PETS, SPOTS, DIRT, RATE, MAX_DIRT,
+    FLOOR_Y, CEIL_Y, LADDER_X, X_MIN, X_MAX, ROOMS, PETS, SPOTS, DIRT, RATE, MAX_DIRT, BED, SLEEP_GAIN,
     clampX, floorAt, path, petInfo, newPet, decay, cleanliness, chooseRequest, pickSpot, spotPos, randomDirt,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -45,8 +45,8 @@
     @keyframes pop { 40% { transform: scale(1.35); } }
     .icon-btn { border: none; background: #fff; border-radius: 12px; padding: 7px 11px; font-size: 18px; cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.08); }
 
-    .meters { display: flex; gap: 8px; padding: 2px 10px 4px; }
-    .meter { flex: 1; display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,.75); border-radius: 12px; padding: 4px 8px; min-width: 0; }
+    .meters { display: flex; gap: 6px; padding: 2px 10px 4px; }
+    .meter { flex: 1; display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,.75); border-radius: 12px; padding: 4px 7px; min-width: 0; }
     .meter .ic { font-size: 16px; }
     .meter .track { flex: 1; height: 10px; background: #eee3d6; border-radius: 6px; overflow: hidden; }
     .meter .fill { height: 100%; width: 50%; border-radius: 6px; background: #6cc070; transition: width .6s, background .6s; }
@@ -66,6 +66,10 @@
     #pet .pb.eat { animation: chomp .35s infinite; }
     #pet .pb.jump { animation: jump .6s; }
     #pet .pb.shake { animation: shake .5s; }
+    #pet .pb.sleep { animation: breathe 2.4s ease-in-out infinite; }
+    @keyframes breathe { 0%, 100% { transform: rotate(-10deg) scale(1, .96); } 50% { transform: rotate(-10deg) scale(1.04, 1); } }
+    #night { opacity: 0; transition: opacity 1s; }
+    #night.on { opacity: .3; }
     @keyframes hop { 50% { transform: translateY(-9px); } }
     @keyframes climb { 50% { transform: translateX(-5px) rotate(-6deg); } }
     @keyframes chomp { 50% { transform: scale(1.08, .9); } }
@@ -154,6 +158,7 @@
     <div class="meter" title="Сытость"><span class="ic">🍖</span><div class="track"><div class="fill" id="m-food"></div></div></div>
     <div class="meter" title="Чистота"><span class="ic">✨</span><div class="track"><div class="fill" id="m-clean"></div></div></div>
     <div class="meter" title="Веселье"><span class="ic">😊</span><div class="track"><div class="fill" id="m-fun"></div></div></div>
+    <div class="meter" title="Бодрость"><span class="ic">💤</span><div class="track"><div class="fill" id="m-energy"></div></div></div>
   </div>
 
   <main class="stage">
@@ -189,7 +194,8 @@
         <li>⚽ <b>Играть</b> — нажимай в разные места дома, и питомец побежит за игрушкой.</li>
         <li>🙈 <b>Прятки</b> — питомец спрячется, а ты ищи: нажимай на мебель. Иногда он прячется и сам!</li>
         <li>💬 Над питомцем появляется облачко — это просьба. Выполни её и получи ⭐.</li>
-        <li>👋 Нажми на питомца, чтобы погладить.</li>
+        <li>🛏️ Устал — нажми на кровать, и питомец ляжет спать. Если совсем устанет, уснёт сам.</li>
+        <li>👋 Нажми на питомца, чтобы погладить (или разбудить).</li>
       </ul>
       <div class="row"><button class="btn btn-primary" id="btn-help-close">Понятно</button></div>
     </div>
@@ -239,8 +245,9 @@
     let S = null;
     try { S = JSON.parse(localStorage.getItem('house-state')); } catch (e) { S = null; }
     const fresh = !S || !S.pet;
-    if (fresh) S = { pet: H.newPet(), food: 70, fun: 70, stars: 0, dirt: [], req: null, t: Date.now() };
+    if (fresh) S = { pet: H.newPet(), food: 70, fun: 70, energy: 80, stars: 0, dirt: [], req: null, t: Date.now() };
     S.dirt = Array.isArray(S.dirt) ? S.dirt : [];
+    if (typeof S.energy !== 'number') S.energy = 80; // сохранение до появления сна
     const save = () => { S.t = Date.now(); try { localStorage.setItem('house-state', JSON.stringify(S)); } catch (e) { /* ничего */ } };
 
     const P = () => H.petInfo(S.pet.type);
@@ -250,6 +257,7 @@
     let mode = null;               // null | 'play' | 'seek'
     let busy = false;              // ест или бежит за игрушкой
     let hidden = null;             // { spot, misses } — питомец прячется
+    let sleeping = null;           // { zzz } — питомец спит на кровати
     let lastSpot = null;
     let catches = 0;               // поймано игрушек за эту просьбу «поиграть»
     let now = Date.now();
@@ -324,7 +332,7 @@
         <ellipse cx="94" cy="${F2 - 84}" rx="30" ry="14" fill="#fff"/>
         <rect x="58" y="${F2 - 78}" width="164" height="76" rx="12" fill="url(#pStars)"/>
         <path d="M58 ${F2 - 60} h164" stroke="#64b5f6" stroke-width="3"/>
-        ${emo(186, F2 - 74, 30, '🧸')}</g>`;
+        ${emo(203, F2 - 74, 28, '🧸')}</g>`;
       s += `<g data-f="wardrobe">
         <rect x="248" y="${F2 - 182}" width="74" height="182" rx="6" fill="#a1887f"/>
         <rect x="244" y="${F2 - 188}" width="82" height="10" rx="4" fill="#8d6e63"/>
@@ -412,7 +420,7 @@
       for (let y = F2 - 10; y < F1; y += 28) s += `<line x1="332" y1="${y}" x2="358" y2="${y}"/>`;
       s += `</g>`;
       // Слои: питомец в укрытии (за мебелью), мебель, грязь, питомец, эффекты.
-      s += `<g id="hide-layer"></g><g id="furn">${furniture()}</g><g id="food-layer"></g><g id="dirt-layer"></g><g id="pet-layer"></g><g id="fx-layer"></g>`;
+      s += `<g id="hide-layer"></g><g id="furn">${furniture()}</g><g id="food-layer"></g><g id="dirt-layer"></g><g id="pet-layer"></g><rect id="night" x="32" y="${H.CEIL_Y[2]}" width="342" height="220" fill="#1a237e" pointer-events="none"/><g id="fx-layer"></g>`;
       svg.innerHTML = s;
     }
     drawHouse();
@@ -483,7 +491,7 @@
     let sayUntil = 0;
     function showBubble(text) {
       const b = $('bubble');
-      if (!text || hidden) { b.classList.add('off'); return; }
+      if (!text || hidden || sleeping) { b.classList.add('off'); return; }
       // (путь облачка строится ниже, когда известна ширина текста)
       const t = $('bubble-t');
       t.textContent = text;
@@ -495,10 +503,10 @@
       const h = w / 2 + 12;
       $('bubble-p').setAttribute('d', `M${-h + 12} -52 h${2 * h - 24} a12 12 0 0 1 12 12 v24 a12 12 0 0 1 -12 12 h${-h + 22} l-10 10 l-10 -10 h${-h + 22} a12 12 0 0 1 -12 -12 v-24 a12 12 0 0 1 12 -12 z`);
     }
-    const REQ_ICON = () => ({ feed: P().foods[0][0], clean: '🧽', play: P().toy });
+    const REQ_ICON = () => ({ feed: P().foods[0][0], clean: '🧽', play: P().toy, sleep: '😴' });
     function refreshBubble() {
       if (Date.now() < sayUntil) return;
-      showBubble(S.req && !hidden ? REQ_ICON()[S.req] : '');
+      showBubble(S.req && !hidden && !sleeping ? REQ_ICON()[S.req] : '');
     }
 
     // ---------- Звук ----------
@@ -535,17 +543,18 @@
       set('m-food', S.food);
       set('m-clean', H.cleanliness(S.dirt.length));
       set('m-fun', S.fun);
+      set('m-energy', S.energy);
       $('stars').textContent = `⭐ ${S.stars}`;
       $('title').textContent = `${P().emoji} ${S.pet.name}`;
       $('toy-ic').textContent = P().toy;
       pet.querySelector('.pe').textContent = P().emoji;
     }
     function renderButtons() {
-      const lock = !!hidden || busy;
+      const lock = !!hidden || busy || !!sleeping;
       $('act-feed').disabled = lock || mode === 'play';
       $('act-hide').disabled = lock;
-      $('act-play').disabled = !!hidden;
-      $('act-clean').disabled = !!hidden;
+      $('act-play').disabled = !!hidden || !!sleeping;
+      $('act-clean').disabled = !!hidden || !!sleeping;
       $('act-play').classList.toggle('on', mode === 'play');
       $('play-label').textContent = mode === 'play' ? 'Хватит' : 'Играть';
       $('act-feed').classList.toggle('want', S.req === 'feed' && !hidden);
@@ -629,6 +638,7 @@
       if (kind === 'feed') status(`${n} хочет есть! Нажми «🍖 Покормить»`, 5000);
       if (kind === 'clean') status(`${n} просит убрать в доме 🧽`, 5000);
       if (kind === 'play') status(`${n} хочет поиграть! Нажми «${P().toy} Играть»`, 5000);
+      if (kind === 'sleep') status(`${n} хочет спать 😴 Нажми на кровать 🛏️`, 5000);
       refreshBubble(); renderButtons(); save();
     }
 
@@ -724,9 +734,62 @@
       renderMeters(); renderButtons(); save();
     }
 
+    // ---------- Сон ----------
+    async function goSleep(auto) {
+      if (busy || hidden || sleeping) return;
+      const n = S.pet.name;
+      if (S.energy >= 90 && !auto) {
+        stopWalking();
+        anim('shake');
+        say('🙅');
+        status(`${n}: «Я ещё не хочу спать!»`);
+        return;
+      }
+      $('tray').hidden = true;
+      mode = null;
+      busy = true;
+      renderButtons();
+      status(auto ? `${n} очень ${g('устал', 'устала')} и идёт спать…` : `${n} идёт спать… 🛏️`);
+      const ok = await walkTo(H.BED.x, H.BED.floor);
+      busy = false;
+      if (!ok || hidden) { renderButtons(); return; }
+      // Ложится под одеяло (за кроватью видна только голова), в спальне гаснет свет.
+      sleeping = { zzz: setInterval(() => fx(pos.x + 26, pos.y - 56, '💤', 'fx', 26), 1400) };
+      $('hide-layer').appendChild(pet);
+      pos = { x: H.BED.x, y: H.FLOOR_Y[H.BED.floor] + H.BED.dy };
+      placePet();
+      anim('sleep');
+      $('night').classList.add('on');
+      status(`Тс-с… ${n} спит 😴`, 600000);
+      refreshBubble(); renderButtons(); save();
+    }
+    function wakeUp(early) {
+      if (!sleeping) return;
+      clearInterval(sleeping.zzz);
+      sleeping = null;
+      $('night').classList.remove('on');
+      $('pet-layer').appendChild(pet);
+      pos = { x: H.BED.x + 95, y: H.FLOOR_Y[H.BED.floor] };
+      placePet();
+      anim('jump');
+      const n = S.pet.name;
+      if (early && S.energy < 60) {
+        say('🥱');
+        status(`${n} ${g('проснулся', 'проснулась')}: «Ещё бы чуть-чуть поспать…»`);
+      } else if (S.req === 'sleep') {
+        fulfill();
+      } else {
+        say('😊');
+        status(`${n} ${g('выспался', 'выспалась')}! ☀️`);
+      }
+      nextWanderAt = Date.now() + 3000;
+      nextReqAt = Math.max(nextReqAt, Date.now() + 15000); // дать проснуться
+      renderMeters(); renderButtons(); save();
+    }
+
     // ---------- Прятки ----------
     async function startHide(sneaky) {
-      if (busy || hidden) return;
+      if (busy || hidden || sleeping) return;
       $('tray').hidden = true;
       mode = null;
       stopWalking();
@@ -823,10 +886,12 @@
         if (S.req === 'feed') openTray();
         if (S.req === 'play' && mode !== 'play') togglePlay();
         if (S.req === 'clean') highlightDirt();
+        if (S.req === 'sleep') goSleep();
         return;
       }
       if (e.target.closest('#pet')) {
         if (hidden) { found(); return; }
+        if (sleeping) { wakeUp(true); return; }
         if (busy) return;
         stopWalking();
         anim('jump');
@@ -840,6 +905,11 @@
       }
       if (mode === 'play') { throwToy(svgPoint(e)); return; }
       const f = e.target.closest('[data-f]');
+      if (f && f.dataset.f === 'bed' && !hidden) {
+        if (sleeping) wakeUp(true);
+        else goSleep();
+        return;
+      }
       if (f) tapFurniture(f.dataset.f, f);
     });
 
@@ -884,8 +954,9 @@
     $('btn-np-yes').onclick = () => {
       $('newpet').hidden = true;
       if (hidden) { hidden = null; $('pet-layer').appendChild(pet); }
+      if (sleeping) { clearInterval(sleeping.zzz); sleeping = null; $('night').classList.remove('on'); $('pet-layer').appendChild(pet); }
       S.pet = H.newPet(Math.random, S.pet.type);
-      Object.assign(S, { food: 70, fun: 70, req: null });
+      Object.assign(S, { food: 70, fun: 70, energy: 80, req: null });
       mode = null; busy = false; catches = 0;
       stopWalking();
       pos = { x: 200, y: F1 };
@@ -904,23 +975,28 @@
       if (document.hidden) return;
       now = Date.now();
       H.decay(S, 1);
+      if (sleeping) {
+        S.energy = Math.min(100, S.energy + H.SLEEP_GAIN + H.RATE.energy);
+        if (S.energy >= 100) wakeUp(false);
+      }
       if (now > nextDirtAt) {
         addDirt();
         nextDirtAt = now + rnd(30000, 55000);
       }
-      const free = !hidden && !busy && mode !== 'play' && $('tray').hidden && $('count').hidden;
+      const free = !hidden && !busy && !sleeping && mode !== 'play' && $('tray').hidden && $('count').hidden;
+      if (free && S.energy <= 0) goSleep(true); // совсем устал — засыпает сам
       if (!S.req && free && now > nextReqAt) {
-        const kind = H.chooseRequest({ food: S.food, fun: S.fun, dirt: S.dirt.length });
+        const kind = H.chooseRequest({ food: S.food, fun: S.fun, energy: S.energy, dirt: S.dirt.length });
         if (kind === 'hide') startHide(true);
         else ask(kind);
         nextReqAt = now + rnd(25000, 40000);
       }
-      if (free && now > nextWanderAt) {
+      if (free && S.energy > 0 && now > nextWanderAt) {
         const room = H.ROOMS[Math.floor(Math.random() * H.ROOMS.length)];
         walkTo(rnd(room.x0 + 40, room.x1 - 40), room.floor);
         nextWanderAt = now + rnd(5000, 11000);
       }
-      if (now > statusHold && now > nextTipAt && !hidden) {
+      if (now > statusHold && now > nextTipAt && !hidden && !sleeping) {
         if (S.req) ask(S.req, true);
         else status(TIPS()[Math.floor(Math.random() * TIPS().length)], 0);
         nextTipAt = now + 9000;
