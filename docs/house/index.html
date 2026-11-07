@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Дом</title>
+  <meta name="description" content="Детская игра: в доме живёт питомец — корми его, играй, убирай в комнатах и ищи, когда он прячется.">
+  <meta name="theme-color" content="#7cc66b">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #3a2f28;
+      --muted: #7a6a5c;
+      --accent: #ff8a3d;
+      --accent-dark: #e8701f;
+      --vh: 100vh;
+      color-scheme: light;
+    }
+    @supports (height: 100dvh) { :root { --vh: 100dvh; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      height: var(--vh);
+      display: flex;
+      flex-direction: column;
+      font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(#bfe6ff, #e8f7ff 55%, #dff3d6);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+    button { font: inherit; }
+
+    /* ---------- Шапка ---------- */
+    .bar { display: flex; align-items: center; gap: 8px; padding: max(8px, env(safe-area-inset-top)) 10px 4px; }
+    .title { font-weight: 900; font-size: 20px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stars { font-weight: 900; font-size: 17px; background: #fff; border-radius: 12px; padding: 5px 10px; box-shadow: 0 2px 0 rgba(0,0,0,.08); }
+    .stars.pop { animation: pop .5s; }
+    @keyframes pop { 40% { transform: scale(1.35); } }
+    .icon-btn { border: none; background: #fff; border-radius: 12px; padding: 7px 11px; font-size: 18px; cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.08); }
+
+    .meters { display: flex; gap: 8px; padding: 2px 10px 4px; }
+    .meter { flex: 1; display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,.75); border-radius: 12px; padding: 4px 8px; min-width: 0; }
+    .meter .ic { font-size: 16px; }
+    .meter .track { flex: 1; height: 10px; background: #eee3d6; border-radius: 6px; overflow: hidden; }
+    .meter .fill { height: 100%; width: 50%; border-radius: 6px; background: #6cc070; transition: width .6s, background .6s; }
+
+    /* ---------- Дом ---------- */
+    /* Трава и небо нарисованы шире картинки — обрезаем по сцене, чтобы не закрывали кнопки. */
+    .stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+    #house { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; display: block; }
+    .emo { font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
+    #house [data-f], #house [data-dirt], #pet { cursor: pointer; }
+    .seek #house [data-f]:hover { filter: brightness(1.06); }
+    .wig { animation: wig .5s; transform-box: fill-box; transform-origin: 50% 100%; }
+    @keyframes wig { 20% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } 80% { transform: rotate(-1.5deg); } }
+    #pet .pb { transform-box: fill-box; transform-origin: 50% 100%; }
+    #pet .pb.walk { animation: hop .32s infinite; }
+    #pet .pb.climb { animation: climb .4s infinite; }
+    #pet .pb.eat { animation: chomp .35s infinite; }
+    #pet .pb.jump { animation: jump .6s; }
+    #pet .pb.shake { animation: shake .5s; }
+    @keyframes hop { 50% { transform: translateY(-9px); } }
+    @keyframes climb { 50% { transform: translateX(-5px) rotate(-6deg); } }
+    @keyframes chomp { 50% { transform: scale(1.08, .9); } }
+    @keyframes jump { 35% { transform: translateY(-46px) scale(1.06); } 70% { transform: translateY(0) scale(1.1, .9); } }
+    @keyframes shake { 20%, 60% { transform: rotate(-8deg); } 40%, 80% { transform: rotate(8deg); } }
+    #bubble { transition: opacity .2s; }
+    #bubble.off { opacity: 0; pointer-events: none; }
+    #bubble .bb { transform-box: fill-box; transform-origin: 50% 100%; animation: bob 1.4s ease-in-out infinite; }
+    @keyframes bob { 50% { transform: translateY(-5px); } }
+    .dirt { transition: opacity .25s; }
+    .dirt.hl { animation: blink .6s 4; }
+    @keyframes blink { 50% { filter: drop-shadow(0 0 6px #ffeb3b) brightness(1.2); } }
+    .fx { pointer-events: none; transform-box: fill-box; animation: rise 1.3s ease-out forwards; }
+    @keyframes rise { to { transform: translateY(-80px); opacity: 0; } }
+    .fx.sparkle { animation: sparkle .8s ease-out forwards; transform-origin: 50% 50%; }
+    @keyframes sparkle { 0% { transform: scale(.4); } 60% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+    .hint-glow { pointer-events: none; animation: glow 1s ease-in-out infinite; }
+    @keyframes glow { 50% { opacity: .35; } }
+    .toy-fly { pointer-events: none; }
+
+    /* ---------- Низ ---------- */
+    .dock { padding: 4px 10px max(10px, env(safe-area-inset-bottom)); }
+    .status { text-align: center; font-weight: 800; font-size: 15px; min-height: 2.7em; display: grid; place-items: center; line-height: 1.3; padding: 0 4px; }
+    .tray { display: flex; justify-content: center; gap: 10px; margin: 0 0 8px; }
+    .tray[hidden] { display: none; }
+    .tray button { border: none; background: #fff; border-radius: 16px; width: 66px; height: 62px; font-size: 34px; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+    .tray button:active { transform: translateY(2px); box-shadow: none; }
+    .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .act {
+      border: none; border-radius: 16px; padding: 6px 2px 7px; cursor: pointer; background: #fff; color: var(--ink);
+      box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; font-weight: 800; font-size: 13px;
+    }
+    .act .ic { font-size: 26px; line-height: 1.1; }
+    .act.on { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark); }
+    .act.want { animation: want 1.2s ease-in-out infinite; }
+    @keyframes want { 50% { box-shadow: 0 0 0 4px #ffd54f, 0 3px 0 rgba(0,0,0,.12); } }
+    .act:disabled { opacity: .4; cursor: default; animation: none; }
+    .act:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+
+    @media (max-height: 640px) {
+      .act .ic { font-size: 22px; }
+      .status { min-height: 2.5em; font-size: 14px; }
+    }
+    /* Телефон в альбомной ориентации: дом слева, всё остальное справа. */
+    @media (orientation: landscape) and (max-height: 520px) {
+      body { display: grid; grid-template-columns: 1fr minmax(260px, 36%); grid-template-rows: auto auto 1fr; }
+      .bar { grid-column: 2; grid-row: 1; }
+      .meters { grid-column: 2; grid-row: 2; }
+      .stage { grid-column: 1; grid-row: 1 / 4; margin: 6px 0 6px 6px; }
+      .dock { grid-column: 2; grid-row: 3; display: flex; flex-direction: column; justify-content: flex-end; }
+      .actions { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* ---------- Окна ---------- */
+    .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(40, 30, 20, .45); z-index: 10; animation: fade .2s; }
+    .overlay[hidden] { display: none; }
+    @keyframes fade { from { opacity: 0; } }
+    .modal { width: min(100%, 420px); max-height: calc(var(--vh) - 32px); overflow: auto; background: #fff; border-radius: 22px; padding: 20px 18px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+    .modal h2 { margin: 2px 0 8px; font-size: 24px; }
+    .modal p { color: var(--muted); margin: 6px 0 12px; }
+    .big { font-size: 76px; line-height: 1.1; }
+    .help { text-align: left; font-size: 15px; line-height: 1.45; padding-left: 20px; margin: 6px 0; }
+    .btn {
+      flex: 1; border: none; border-radius: 14px; padding: 12px 10px; font-weight: 900; font-size: 17px; cursor: pointer;
+      background: #f3ede6; color: var(--ink); box-shadow: 0 3px 0 rgba(0,0,0,.12); text-decoration: none; text-align: center; display: block;
+    }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark); }
+    .btn:active { transform: translateY(2px); box-shadow: none; }
+    .modal .row { display: flex; gap: 8px; margin-top: 14px; }
+    .menu-list { display: grid; gap: 8px; }
+    .countdown { font-size: 96px; font-weight: 900; color: #fff; text-shadow: 0 4px 16px rgba(0,0,0,.35); text-align: center; line-height: 1.1; }
+    .countdown small { display: block; font-size: 26px; }
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 20; overflow: hidden; }
+    #confetti span { position: absolute; top: -40px; font-size: 26px; animation: fall linear forwards; }
+    @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <span class="title" id="title">🏠 Дом</span>
+    <span class="stars" id="stars" title="Звёздочки за выполненные просьбы">⭐ 0</span>
+    <button class="icon-btn" id="btn-help" title="Как играть">❓</button>
+    <button class="icon-btn" id="btn-menu" title="Меню">☰</button>
+  </header>
+  <div class="meters">
+    <div class="meter" title="Сытость"><span class="ic">🍖</span><div class="track"><div class="fill" id="m-food"></div></div></div>
+    <div class="meter" title="Чистота"><span class="ic">✨</span><div class="track"><div class="fill" id="m-clean"></div></div></div>
+    <div class="meter" title="Веселье"><span class="ic">😊</span><div class="track"><div class="fill" id="m-fun"></div></div></div>
+  </div>
+
+  <main class="stage">
+    <svg id="house" viewBox="0 0 760 640" preserveAspectRatio="xMidYMid meet" aria-label="Дом"></svg>
+  </main>
+
+  <section class="dock">
+    <div class="status" id="status"></div>
+    <div class="tray" id="tray" hidden></div>
+    <div class="actions">
+      <button class="act" id="act-feed"><span class="ic">🍖</span>Покормить</button>
+      <button class="act" id="act-clean"><span class="ic">🧽</span>Убрать</button>
+      <button class="act" id="act-play"><span class="ic" id="toy-ic">⚽</span><span id="play-label">Играть</span></button>
+      <button class="act" id="act-hide"><span class="ic">🙈</span>Прятки</button>
+    </div>
+  </section>
+
+  <div class="overlay" id="welcome" hidden>
+    <div class="modal">
+      <div class="big" id="w-emoji">🐶</div>
+      <h2 id="w-title">Знакомься!</h2>
+      <p id="w-text"></p>
+      <div class="row"><button class="btn btn-primary" id="btn-welcome">Привет! 👋</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="help" hidden>
+    <div class="modal">
+      <h2>Как играть</h2>
+      <ul class="help">
+        <li>🍖 <b>Покормить</b> — выбери еду, питомец сам прибежит к миске.</li>
+        <li>🧽 <b>Убрать</b> — нажимай на лужи, следы, пыль и паутину, пока не исчезнут.</li>
+        <li>⚽ <b>Играть</b> — нажимай в разные места дома, и питомец побежит за игрушкой.</li>
+        <li>🙈 <b>Прятки</b> — питомец спрячется, а ты ищи: нажимай на мебель. Иногда он прячется и сам!</li>
+        <li>💬 Над питомцем появляется облачко — это просьба. Выполни её и получи ⭐.</li>
+        <li>👋 Нажми на питомца, чтобы погладить.</li>
+      </ul>
+      <div class="row"><button class="btn btn-primary" id="btn-help-close">Понятно</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="menu" hidden>
+    <div class="modal">
+      <h2>Меню</h2>
+      <div class="menu-list">
+        <button class="btn" id="btn-rename">✏️ Другое имя</button>
+        <button class="btn" id="btn-newpet">🐾 Другой питомец</button>
+        <a class="btn" href="../">♟️ Шахматы</a>
+        <a class="btn" href="../pandas/">🐼 Найди панд</a>
+        <a class="btn" href="../jamb/">🎲 Ямб</a>
+        <button class="btn btn-primary" id="btn-menu-close">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="newpet" hidden>
+    <div class="modal">
+      <div class="big" id="np-emoji">🐶</div>
+      <h2>Другой питомец?</h2>
+      <p id="np-text"></p>
+      <div class="row"><button class="btn" id="btn-np-no">Нет, остаёмся</button><button class="btn btn-primary" id="btn-np-yes">Да</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="count" hidden><div class="countdown" id="count-n">3</div></div>
+  <div id="confetti" aria-hidden="true"></div>
+
+  <script src="house.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const H = window.House;
+    const $ = (id) => document.getElementById(id);
+    const svg = $('house');
+    const NS = 'http://www.w3.org/2000/svg';
+    const F1 = H.FLOOR_Y[1], F2 = H.FLOOR_Y[2];
+    const BOWL_X = 622;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // ---------- Состояние ----------
+    // S сохраняется: питомец, сытость, веселье, звёзды, грязь, текущая просьба, время.
+    let S = null;
+    try { S = JSON.parse(localStorage.getItem('house-state')); } catch (e) { S = null; }
+    const fresh = !S || !S.pet;
+    if (fresh) S = { pet: H.newPet(), food: 70, fun: 70, stars: 0, dirt: [], req: null, t: Date.now() };
+    S.dirt = Array.isArray(S.dirt) ? S.dirt : [];
+    const save = () => { S.t = Date.now(); try { localStorage.setItem('house-state', JSON.stringify(S)); } catch (e) { /* ничего */ } };
+
+    const P = () => H.petInfo(S.pet.type);
+    const g = (m, f) => (S.pet.g === 'f' ? f : m);
+
+    let pos = { x: 200, y: F1 };   // где питомец (y — пол этажа)
+    let mode = null;               // null | 'play' | 'seek'
+    let busy = false;              // ест или бежит за игрушкой
+    let hidden = null;             // { spot, misses } — питомец прячется
+    let lastSpot = null;
+    let catches = 0;               // поймано игрушек за эту просьбу «поиграть»
+    let now = Date.now();
+    let nextReqAt = now + 8000, nextDirtAt = now + 20000, nextWanderAt = now + 3000, nextTipAt = 0;
+
+    // Пока игры не было, время шло: питомец проголодался, в доме набралась грязь.
+    (function catchUp() {
+      const away = Math.max(0, (Date.now() - (S.t || Date.now())) / 1000);
+      H.decay(S, Math.min(away, 300));
+      for (let k = Math.min(3, Math.floor(away / 150)); k > 0 && S.dirt.length < H.MAX_DIRT; k--) {
+        const d = H.randomDirt(S.dirt);
+        if (d) S.dirt.push(d);
+      }
+      if (fresh) for (let k = 0; k < 2; k++) { const d = H.randomDirt(S.dirt); if (d) S.dirt.push(d); }
+    })();
+
+    // ---------- Рисуем дом ----------
+    const emo = (x, y, size, ch, extra = '') => `<text class="emo" x="${x}" y="${y}" font-size="${size}" text-anchor="middle"${extra}>${ch}</text>`;
+    function windowSvg(x, y, w, h, curtain) {
+      let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#bfe6ff" stroke="#fff" stroke-width="7"/>`;
+      s += `<path d="M${x + w / 2} ${y} V${y + h} M${x} ${y + h / 2} H${x + w}" stroke="#fff" stroke-width="5"/>`;
+      s += `<ellipse cx="${x + w * 0.3}" cy="${y + h * 0.28}" rx="${w * 0.12}" ry="${h * 0.06}" fill="#fff" opacity=".8"/>`;
+      if (curtain) {
+        s += `<path d="M${x - 10} ${y - 8} q14 ${h * 0.5} 4 ${h + 14} h14 q-6 ${-h * 0.6} 6 ${-h - 14} z" fill="${curtain}"/>`;
+        s += `<path d="M${x + w + 10} ${y - 8} q-14 ${h * 0.5} -4 ${h + 14} h-14 q6 ${-h * 0.6} -6 ${-h - 14} z" fill="${curtain}"/>`;
+        s += `<rect x="${x - 16}" y="${y - 12}" width="${w + 32}" height="6" rx="3" fill="#8d6e63"/>`;
+      }
+      return s;
+    }
+    const lamp = (x, ceil) => `<line x1="${x}" y1="${ceil}" x2="${x}" y2="${ceil + 26}" stroke="#6d5d50" stroke-width="2"/>` +
+      `<path d="M${x - 18} ${ceil + 40} q18 -22 36 0 z" fill="#ffcc80"/><circle cx="${x}" cy="${ceil + 42}" r="6" fill="#fff59d"/>`;
+
+    function furniture() {
+      let s = '';
+      // Гостиная: диван, тумба с телевизором.
+      s += `<g data-f="sofa">
+        <rect x="62" y="${F1 - 88}" width="146" height="54" rx="16" fill="#e57373"/>
+        <rect x="74" y="${F1 - 80}" width="58" height="38" rx="12" fill="#ef9a9a"/><rect x="138" y="${F1 - 80}" width="58" height="38" rx="12" fill="#ef9a9a"/>
+        <rect x="56" y="${F1 - 48}" width="158" height="34" rx="10" fill="#ef8a8a"/>
+        <rect x="46" y="${F1 - 64}" width="24" height="54" rx="10" fill="#d65f5f"/><rect x="200" y="${F1 - 64}" width="24" height="54" rx="10" fill="#d65f5f"/>
+        <rect x="62" y="${F1 - 12}" width="10" height="12" fill="#6d4c41"/><rect x="198" y="${F1 - 12}" width="10" height="12" fill="#6d4c41"/></g>`;
+      s += `<g data-f="tv">
+        <rect x="236" y="${F1 - 50}" width="80" height="50" rx="6" fill="#a1887f"/>
+        <line x1="276" y1="${F1 - 46}" x2="276" y2="${F1 - 4}" stroke="#8d6e63" stroke-width="2"/>
+        <circle cx="268" cy="${F1 - 25}" r="3" fill="#6d4c41"/><circle cx="284" cy="${F1 - 25}" r="3" fill="#6d4c41"/>
+        <rect x="270" y="${F1 - 60}" width="12" height="10" fill="#455a64"/>
+        <rect x="242" y="${F1 - 108}" width="68" height="50" rx="7" fill="#37474f"/>
+        <rect x="248" y="${F1 - 102}" width="56" height="38" rx="4" fill="#4fc3f7"/>
+        <circle cx="266" cy="${F1 - 86}" r="7" fill="#fff59d"/><path d="M250 ${F1 - 66} l14 -14 l12 10 l10 -8 l16 12 z" fill="#81c784"/></g>`;
+      // Кухня: плита, стол со скатертью, миска, холодильник.
+      s += `<g data-f="stove">
+        <rect x="396" y="${F1 - 92}" width="68" height="92" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="3"/>
+        <rect x="406" y="${F1 - 62}" width="48" height="40" rx="5" fill="#455a64"/><rect x="412" y="${F1 - 56}" width="36" height="12" rx="3" fill="#ffb74d" opacity=".55"/>
+        <circle cx="412" cy="${F1 - 78}" r="4" fill="#78909c"/><circle cx="430" cy="${F1 - 78}" r="4" fill="#78909c"/><circle cx="448" cy="${F1 - 78}" r="4" fill="#78909c"/>
+        <rect x="402" y="${F1 - 96}" width="56" height="5" rx="2" fill="#546e7a"/>
+        <path d="M414 ${F1 - 104} h34 v8 h-34 z" fill="#90a4ae"/></g>`;
+      s += `<g data-f="table">
+        <rect x="478" y="${F1 - 84}" width="124" height="84" rx="8" fill="url(#pCheck)"/>
+        <path d="M478 ${F1 - 6} q8 8 15 0 t15 0 t15 0 t15 0 t16 0 t15 0 t15 0 t16 0 v6 h-124 z" fill="#e57373"/>
+        <rect x="474" y="${F1 - 88}" width="132" height="10" rx="5" fill="#ffccbc"/>
+        ${emo(510, F1 - 92, 26, '🍎')}${emo(570, F1 - 92, 26, '🫖')}</g>`;
+      s += `<g id="bowl"><path d="M${BOWL_X - 26} ${F1 - 16} h52 l-6 16 h-40 z" fill="#42a5f5"/><ellipse cx="${BOWL_X}" cy="${F1 - 16}" rx="26" ry="5" fill="#1e88e5"/></g>`;
+      s += `<g data-f="fridge">
+        <rect x="645" y="${F1 - 178}" width="72" height="178" rx="12" fill="#e3f2fd" stroke="#90a4ae" stroke-width="3"/>
+        <line x1="647" y1="${F1 - 118}" x2="715" y2="${F1 - 118}" stroke="#90a4ae" stroke-width="3"/>
+        <rect x="653" y="${F1 - 160}" width="6" height="30" rx="3" fill="#90a4ae"/><rect x="653" y="${F1 - 104}" width="6" height="40" rx="3" fill="#90a4ae"/>
+        <circle cx="690" cy="${F1 - 150}" r="6" fill="#ff8a65"/><circle cx="700" cy="${F1 - 134}" r="5" fill="#81c784"/></g>`;
+      // Спальня: кровать, шкаф.
+      s += `<g data-f="bed">
+        <rect x="46" y="${F2 - 116}" width="18" height="116" rx="8" fill="#8d6e63"/>
+        <rect x="216" y="${F2 - 84}" width="16" height="84" rx="7" fill="#8d6e63"/>
+        <ellipse cx="94" cy="${F2 - 84}" rx="30" ry="14" fill="#fff"/>
+        <rect x="58" y="${F2 - 78}" width="164" height="76" rx="12" fill="url(#pStars)"/>
+        <path d="M58 ${F2 - 60} h164" stroke="#64b5f6" stroke-width="3"/>
+        ${emo(186, F2 - 74, 30, '🧸')}</g>`;
+      s += `<g data-f="wardrobe">
+        <rect x="248" y="${F2 - 182}" width="74" height="182" rx="6" fill="#a1887f"/>
+        <rect x="244" y="${F2 - 188}" width="82" height="10" rx="4" fill="#8d6e63"/>
+        <line x1="285" y1="${F2 - 176}" x2="285" y2="${F2 - 8}" stroke="#795548" stroke-width="3"/>
+        <circle cx="279" cy="${F2 - 92}" r="4" fill="#ffd54f"/><circle cx="291" cy="${F2 - 92}" r="4" fill="#ffd54f"/>
+        <rect x="252" y="${F2 - 8}" width="8" height="8" fill="#6d4c41"/><rect x="310" y="${F2 - 8}" width="8" height="8" fill="#6d4c41"/></g>`;
+      // Ванная: стиральная машина, корзина для белья, ванна.
+      s += `<g data-f="washer">
+        <rect x="396" y="${F2 - 86}" width="70" height="86" rx="8" fill="#fafafa" stroke="#b0bec5" stroke-width="3"/>
+        <line x1="398" y1="${F2 - 70}" x2="464" y2="${F2 - 70}" stroke="#b0bec5" stroke-width="2"/>
+        <circle cx="408" cy="${F2 - 78}" r="3" fill="#78909c"/><circle cx="452" cy="${F2 - 78}" r="4" fill="#4fc3f7"/>
+        <circle cx="431" cy="${F2 - 36}" r="23" fill="#90caf9" stroke="#78909c" stroke-width="4"/>
+        <path d="M414 ${F2 - 30} q8 -8 17 0 t17 0" stroke="#e3f2fd" stroke-width="4" fill="none"/></g>`;
+      s += `<g data-f="basket">
+        <rect x="478" y="${F2 - 76}" width="74" height="76" rx="12" fill="url(#pWicker)"/>
+        <rect x="474" y="${F2 - 80}" width="82" height="10" rx="5" fill="#a1764a"/>
+        <path d="M494 ${F2 - 80} q6 -14 18 -8 q10 -12 20 0" fill="#f48fb1"/></g>`;
+      s += `<g data-f="tub">
+        <path d="M712 ${F2 - 118} v-30 q0 -12 -12 -12 h-16" fill="none" stroke="#90a4ae" stroke-width="6" stroke-linecap="round"/>
+        <circle cx="618" cy="${F2 - 78}" r="10" fill="#fff" stroke="#b3e5fc" stroke-width="2"/><circle cx="640" cy="${F2 - 84}" r="13" fill="#fff" stroke="#b3e5fc" stroke-width="2"/>
+        <circle cx="664" cy="${F2 - 78}" r="9" fill="#fff" stroke="#b3e5fc" stroke-width="2"/><circle cx="600" cy="${F2 - 74}" r="7" fill="#fff" stroke="#b3e5fc" stroke-width="2"/>
+        <path d="M560 ${F2 - 76} h154 v28 q0 34 -34 34 h-86 q-34 0 -34 -34 z" fill="#fff" stroke="#b0bec5" stroke-width="4"/>
+        <rect x="556" y="${F2 - 80}" width="162" height="10" rx="5" fill="#eceff1" stroke="#b0bec5" stroke-width="2"/>
+        <rect x="584" y="${F2 - 14}" width="10" height="14" rx="3" fill="#90a4ae"/><rect x="680" y="${F2 - 14}" width="10" height="14" rx="3" fill="#90a4ae"/>
+        ${emo(700, F2 - 80, 24, '🦆')}</g>`;
+      return s;
+    }
+
+    function drawHouse() {
+      let s = `<defs>
+        <pattern id="pDots" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="#e3e8ff"/><circle cx="15" cy="15" r="3" fill="#c5cdf7"/></pattern>
+        <pattern id="pStripes" width="28" height="10" patternUnits="userSpaceOnUse"><rect width="28" height="10" fill="#ffe8cc"/><rect width="10" height="10" fill="#ffdcb3"/></pattern>
+        <pattern id="pTiles" width="26" height="26" patternUnits="userSpaceOnUse"><rect width="26" height="26" fill="#d4f1f4"/><path d="M0 0 H26 M0 0 V26" stroke="#b2e0e6" stroke-width="2"/></pattern>
+        <pattern id="pKitchen" width="34" height="34" patternUnits="userSpaceOnUse"><rect width="34" height="34" fill="#fff6cf"/><path d="M17 8 l3 6 h-6 z" fill="#ffe58a"/></pattern>
+        <pattern id="pCheck" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="#fff"/><rect width="10" height="10" fill="#ef9a9a"/><rect x="10" y="10" width="10" height="10" fill="#ef9a9a"/></pattern>
+        <pattern id="pStars" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="#90caf9"/><path d="M15 7 l2.5 5 5.5 .8 -4 3.9 1 5.4 -5 -2.6 -5 2.6 1 -5.4 -4 -3.9 5.5 -.8z" fill="#fff59d"/></pattern>
+        <pattern id="pWicker" width="12" height="10" patternUnits="userSpaceOnUse"><rect width="12" height="10" fill="#d7a86e"/><path d="M0 5 q3 -4 6 0 t6 0" stroke="#b9874f" stroke-width="2" fill="none"/></pattern>
+        <pattern id="pWood" width="60" height="14" patternUnits="userSpaceOnUse"><rect width="60" height="14" fill="#c8955c"/><path d="M0 1 H60 M30 1 V14" stroke="#b07c45" stroke-width="2"/></pattern>
+      </defs>`;
+      // Небо, солнце, облака, трава.
+      s += `<circle cx="66" cy="62" r="34" fill="#ffd54f"/><circle cx="66" cy="62" r="46" fill="#ffd54f" opacity=".25"/>`;
+      s += `<g fill="#fff" opacity=".9"><ellipse cx="640" cy="52" rx="44" ry="18"/><ellipse cx="670" cy="40" rx="30" ry="18"/><ellipse cx="200" cy="34" rx="30" ry="12"/></g>`;
+      s += `<g pointer-events="none"><rect x="-600" y="612" width="1960" height="600" fill="#7cc66b"/><rect x="-600" y="612" width="1960" height="8" fill="#6ab35a"/></g>`;
+      // Сад под домом: виден, когда экран высокий (телефон в портрете).
+      s += `<g pointer-events="none"><path d="M250 616 q-30 120 -120 260 h300 q-60 -140 -40 -260 z" fill="#e8d3a8"/>`;
+      s += `<g fill="#fff" stroke="#d7ccc8" stroke-width="2">`;
+      for (let x = -560; x < 1340; x += 34) if (x < 120 || x > 470) s += `<path d="M${x} 760 v-44 l11 -12 l11 12 v44 z"/>`;
+      s += `<rect x="-560" y="720" width="680" height="9"/><rect x="470" y="720" width="870" height="9"/><rect x="-560" y="744" width="680" height="9"/><rect x="470" y="744" width="870" height="9"/></g>`;
+      for (const [x, y, ch] of [[60, 690, '🌷'], [110, 700, '🌼'], [520, 692, '🌻'], [600, 700, '🌷'], [680, 690, '🌼'], [-60, 690, '🌳'], [800, 690, '🌳'], [40, 820, '🌸'], [560, 830, '🍄'], [680, 860, '🌷'], [-20, 880, '🌼'], [720, 960, '🌳'], [20, 980, '🐞']]) {
+        s += emo(x, y, ch === '🌳' ? 90 : 34, ch);
+      }
+      s += `</g>`;
+      // Труба и крыша.
+      s += `<rect x="560" y="40" width="42" height="90" fill="#b5523b"/><rect x="554" y="34" width="54" height="12" rx="3" fill="#9c4532"/>`;
+      s += `<polygon points="2,158 380,16 758,158" fill="#e0614f" stroke="#b44a3b" stroke-width="8" stroke-linejoin="round"/>`;
+      s += `<circle cx="380" cy="98" r="26" fill="#bfe6ff" stroke="#fff" stroke-width="7"/><path d="M380 72 V124 M354 98 H406" stroke="#fff" stroke-width="5"/>`;
+      // Стены дома.
+      s += `<rect x="20" y="146" width="720" height="470" fill="#f2d3a4" stroke="#c9a074" stroke-width="5"/>`;
+      // Комнаты.
+      s += `<rect x="32" y="${H.CEIL_Y[2]}" width="342" height="220" fill="url(#pDots)"/>`;
+      s += `<rect x="386" y="${H.CEIL_Y[2]}" width="342" height="220" fill="url(#pTiles)"/>`;
+      s += `<rect x="32" y="${H.CEIL_Y[1]}" width="342" height="220" fill="url(#pStripes)"/>`;
+      s += `<rect x="386" y="${H.CEIL_Y[1]}" width="342" height="220" fill="url(#pKitchen)"/>`;
+      // Окна, картинки, лампы.
+      s += windowSvg(96, 186, 96, 76, '#9fa8da');
+      s += windowSvg(84, 418, 96, 76, '#ffab91');
+      s += windowSvg(498, 408, 84, 64);
+      s += `<circle cx="636" cy="220" r="28" fill="#bfe6ff" stroke="#fff" stroke-width="7"/>`;
+      s += `<ellipse cx="515" cy="222" rx="28" ry="38" fill="#e1f5fe" stroke="#90a4ae" stroke-width="5"/><path d="M503 206 l14 -10" stroke="#fff" stroke-width="4"/>`;
+      s += `<rect x="232" y="410" width="74" height="54" rx="4" fill="#fff" stroke="#8d6e63" stroke-width="6"/><path d="M238 456 l18 -22 l14 14 l10 -10 l20 18 z" fill="#81c784"/><circle cx="290" cy="424" r="6" fill="#ffb74d"/>`;
+      s += `<rect x="396" y="402" width="70" height="56" rx="6" fill="#ffcc80"/><line x1="431" y1="406" x2="431" y2="454" stroke="#f0a95a" stroke-width="3"/>`;
+      s += `<circle cx="680" cy="420" r="18" fill="#fff" stroke="#8d6e63" stroke-width="4"/><path d="M680 420 v-11 M680 420 h8" stroke="#3a2f28" stroke-width="3" stroke-linecap="round"/>`;
+      s += lamp(200, H.CEIL_Y[2]) + lamp(560, H.CEIL_Y[2]) + lamp(200, H.CEIL_Y[1]) + lamp(560, H.CEIL_Y[1]);
+      // Перекрытия и полы.
+      s += `<rect x="32" y="${F2}" width="696" height="14" fill="url(#pWood)"/><rect x="32" y="${F1}" width="696" height="12" fill="url(#pWood)"/>`;
+      s += `<ellipse cx="190" cy="${F1 + 1}" rx="120" ry="7" fill="#9575cd" opacity=".55"/><ellipse cx="150" cy="${F2 + 1}" rx="100" ry="6" fill="#81c784" opacity=".55"/>`;
+      // Стены между комнатами (с проходом внизу).
+      for (const f of [1, 2]) {
+        s += `<rect x="374" y="${H.CEIL_Y[f]}" width="12" height="${220 - 126}" fill="#e4bf8c"/><rect x="370" y="${H.FLOOR_Y[f] - 130}" width="20" height="8" rx="3" fill="#c9a074"/>`;
+      }
+      // Стремянка между этажами.
+      s += `<rect x="326" y="${F2}" width="38" height="14" fill="#7a5a3c"/>`;
+      s += `<g stroke="#8d6e63" stroke-width="6" stroke-linecap="round"><line x1="332" y1="${F2 - 26}" x2="332" y2="${F1}"/><line x1="358" y1="${F2 - 26}" x2="358" y2="${F1}"/></g>`;
+      s += `<g stroke="#a1887f" stroke-width="5">`;
+      for (let y = F2 - 10; y < F1; y += 28) s += `<line x1="332" y1="${y}" x2="358" y2="${y}"/>`;
+      s += `</g>`;
+      // Слои: питомец в укрытии (за мебелью), мебель, грязь, питомец, эффекты.
+      s += `<g id="hide-layer"></g><g id="furn">${furniture()}</g><g id="food-layer"></g><g id="dirt-layer"></g><g id="pet-layer"></g><g id="fx-layer"></g>`;
+      svg.innerHTML = s;
+    }
+    drawHouse();
+
+    // ---------- Питомец ----------
+    const pet = document.createElementNS(NS, 'g');
+    pet.id = 'pet';
+    pet.innerHTML = `<g class="pb"><rect x="-34" y="-70" width="68" height="70" fill="transparent"/><text class="emo pe" y="-8" font-size="56" text-anchor="middle"></text></g>
+      <g id="bubble" class="off" transform="translate(0,-74)"><g class="bb"><path id="bubble-p" fill="#fff" stroke="#ffb74d" stroke-width="3"/><text class="emo" id="bubble-t" y="-17" font-size="30" text-anchor="middle">🍖</text></g></g>`;
+    $('pet-layer').appendChild(pet);
+    const petBody = pet.querySelector('.pb');
+    const placePet = () => pet.setAttribute('transform', `translate(${pos.x.toFixed(1)},${pos.y.toFixed(1)})`);
+    function anim(cls) {
+      petBody.classList.remove('walk', 'climb', 'eat', 'jump', 'shake');
+      if (cls) { void petBody.getBBox(); petBody.classList.add(cls); }
+    }
+
+    // Идёт к точке (через стремянку, если этаж другой). Новый поход отменяет прежний.
+    let moveTok = 0;
+    function walkTo(x, floor) {
+      const tok = ++moveTok;
+      const pts = H.path({ x: pos.x, floor: H.floorAt(pos.y) }, { x, floor });
+      return new Promise((resolve) => {
+        let i = 0, last = performance.now();
+        anim('walk');
+        const step = (t) => {
+          if (tok !== moveTok) { resolve(false); return; }
+          const dt = Math.min(0.05, (t - last) / 1000);
+          last = t;
+          const p = pts[i];
+          const speed = p.climb ? 170 : 230;
+          const dx = p.x - pos.x, dy = p.y - pos.y, d = Math.hypot(dx, dy);
+          if (p.climb && !petBody.classList.contains('climb')) anim('climb');
+          if (d <= speed * dt) {
+            pos.x = p.x; pos.y = p.y;
+            if (++i >= pts.length) { placePet(); anim(null); resolve(true); return; }
+            if (!pts[i].climb) anim('walk');
+          } else {
+            pos.x += dx / d * speed * dt;
+            pos.y += dy / d * speed * dt;
+          }
+          placePet();
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+    }
+    const stopWalking = () => { moveTok++; anim(null); };
+
+    // ---------- Надписи и эффекты ----------
+    let statusHold = 0;
+    function status(t, hold = 3500) { $('status').textContent = t; statusHold = Date.now() + hold; }
+    function fx(x, y, ch, cls = 'fx', size = 30) {
+      const t = document.createElementNS(NS, 'text');
+      t.setAttribute('class', 'emo ' + cls);
+      t.setAttribute('x', x); t.setAttribute('y', y);
+      t.setAttribute('font-size', size); t.setAttribute('text-anchor', 'middle');
+      t.textContent = ch;
+      $('fx-layer').appendChild(t);
+      setTimeout(() => t.remove(), 1400);
+    }
+    const hearts = (n = 3) => { for (let k = 0; k < n; k++) setTimeout(() => fx(pos.x + rnd(-24, 24), pos.y - 60, k % 2 ? '💛' : '❤️'), k * 180); };
+    function say(text, ms = 1300) {
+      // Короткая реплика в облачке над питомцем (потом облачко возвращается к просьбе).
+      sayUntil = Date.now() + ms;
+      showBubble(text);
+    }
+    let sayUntil = 0;
+    function showBubble(text) {
+      const b = $('bubble');
+      if (!text || hidden) { b.classList.add('off'); return; }
+      // (путь облачка строится ниже, когда известна ширина текста)
+      const t = $('bubble-t');
+      t.textContent = text;
+      t.setAttribute('font-size', [...text].length > 2 ? 17 : 30);
+      b.classList.remove('off');
+      // Облачко по ширине текста.
+      let w = 36;
+      try { w = Math.max(36, t.getComputedTextLength()); } catch (e) { /* не нарисовано */ }
+      const h = w / 2 + 12;
+      $('bubble-p').setAttribute('d', `M${-h + 12} -52 h${2 * h - 24} a12 12 0 0 1 12 12 v24 a12 12 0 0 1 -12 12 h${-h + 22} l-10 10 l-10 -10 h${-h + 22} a12 12 0 0 1 -12 -12 v-24 a12 12 0 0 1 12 -12 z`);
+    }
+    const REQ_ICON = () => ({ feed: P().foods[0][0], clean: '🧽', play: P().toy });
+    function refreshBubble() {
+      if (Date.now() < sayUntil) return;
+      showBubble(S.req && !hidden ? REQ_ICON()[S.req] : '');
+    }
+
+    // ---------- Звук ----------
+    let audio = null;
+    function unlockAudio() {
+      if (audio) { if (audio.state === 'suspended') audio.resume(); return; }
+      try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; }
+    }
+    function tone(f, start, dur, type = 'triangle', vol = 0.1) {
+      if (!audio) return;
+      const t0 = audio.currentTime + start, o = audio.createOscillator(), gn = audio.createGain();
+      o.type = type; o.frequency.value = f;
+      gn.gain.setValueAtTime(vol, t0); gn.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.connect(gn).connect(audio.destination); o.start(t0); o.stop(t0 + dur);
+    }
+    function sound(kind) {
+      if (kind === 'voice') [520, 660].forEach((f, k) => tone(f, k * 0.09, 0.12, 'square', 0.05));
+      if (kind === 'ask') [660, 880].forEach((f, k) => tone(f, k * 0.12, 0.16));
+      if (kind === 'chomp') tone(180, 0, 0.08, 'square', 0.05);
+      if (kind === 'wipe') tone(900, 0, 0.06, 'sine', 0.05);
+      if (kind === 'clean') [784, 1047, 1319].forEach((f, k) => tone(f, k * 0.07, 0.15, 'sine', 0.08));
+      if (kind === 'throw') tone(440, 0, 0.12, 'sine', 0.06);
+      if (kind === 'miss') tone(220, 0, 0.15, 'sine', 0.06);
+      if (kind === 'star') [523, 659, 784, 1047].forEach((f, k) => tone(f, k * 0.11, 0.2, 'triangle', 0.12));
+    }
+
+    // ---------- Счётчики ----------
+    function renderMeters() {
+      const set = (id, v) => {
+        const el = $(id);
+        el.style.width = Math.max(4, v) + '%';
+        el.style.background = v > 55 ? '#6cc070' : v > 25 ? '#ffb74d' : '#ef5350';
+      };
+      set('m-food', S.food);
+      set('m-clean', H.cleanliness(S.dirt.length));
+      set('m-fun', S.fun);
+      $('stars').textContent = `⭐ ${S.stars}`;
+      $('title').textContent = `${P().emoji} ${S.pet.name}`;
+      $('toy-ic').textContent = P().toy;
+      pet.querySelector('.pe').textContent = P().emoji;
+    }
+    function renderButtons() {
+      const lock = !!hidden || busy;
+      $('act-feed').disabled = lock || mode === 'play';
+      $('act-hide').disabled = lock;
+      $('act-play').disabled = !!hidden;
+      $('act-clean').disabled = !!hidden;
+      $('act-play').classList.toggle('on', mode === 'play');
+      $('play-label').textContent = mode === 'play' ? 'Хватит' : 'Играть';
+      $('act-feed').classList.toggle('want', S.req === 'feed' && !hidden);
+      $('act-clean').classList.toggle('want', S.req === 'clean' && !hidden);
+      $('act-play').classList.toggle('want', S.req === 'play' && mode !== 'play' && !hidden);
+      document.body.classList.toggle('seek', !!hidden);
+    }
+
+    // ---------- Грязь ----------
+    function dirtSvg(d) {
+      const k = d.side === -1 ? -1 : 1;
+      switch (d.type) {
+        case 'puddle': return `<ellipse cx="0" cy="-3" rx="32" ry="7" fill="#7fb3d5" opacity=".85"/><ellipse cx="-10" cy="-5" rx="9" ry="2" fill="#d6ecfa"/>`;
+        case 'paws': {
+          const paw = (x, y) => `<ellipse cx="${x}" cy="${y}" rx="6" ry="4" fill="#795548"/><circle cx="${x - 6}" cy="${y - 6}" r="2.4" fill="#795548"/><circle cx="${x}" cy="${y - 8}" r="2.4" fill="#795548"/><circle cx="${x + 6}" cy="${y - 6}" r="2.4" fill="#795548"/>`;
+          return paw(-20, -3) + paw(2, -6) + paw(22, -2);
+        }
+        case 'crumbs': return [[-18, -3], [-8, -5], [3, -2], [12, -6], [20, -3], [-2, -8]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5" fill="#c49a6c"/>`).join('');
+        case 'sock': return emo(0, -4, 32, '🧦');
+        case 'dust': return `<g fill="#a99f94" opacity=".85"><circle cx="-14" cy="-10" r="11"/><circle cx="2" cy="-14" r="14"/><circle cx="16" cy="-8" r="10"/><circle cx="-2" cy="-5" r="10"/></g><circle cx="-4" cy="-14" r="2" fill="#3a2f28"/><circle cx="6" cy="-14" r="2" fill="#3a2f28"/>`;
+        case 'web': return `<g transform="scale(${k},1)" stroke="#9e9e9e" stroke-width="1.6" fill="none" opacity=".9"><path d="M0 0 L46 0 M0 0 L0 46 M0 0 L36 28 M0 0 L20 42 M0 0 L42 14"/><path d="M14 0 Q12 8 0 14 M28 0 Q24 18 0 28 M42 0 Q38 30 0 42"/></g><circle cx="${k * 26}" cy="20" r="4" fill="#3a2f28"/>`;
+      }
+      return '';
+    }
+    function renderDirt() {
+      $('dirt-layer').innerHTML = S.dirt.map((d) => {
+        const max = H.DIRT[d.type].hp;
+        const hitY = d.type === 'web' ? 20 : -10;
+        const hitX = d.type === 'web' ? (d.side === -1 ? -22 : 22) : 0;
+        return `<g class="dirt" data-dirt="${d.id}" transform="translate(${d.x},${d.y})" style="opacity:${(0.35 + 0.65 * d.hp / max).toFixed(2)}">` +
+          `<circle cx="${hitX}" cy="${hitY}" r="36" fill="transparent"/>${dirtSvg(d)}</g>`;
+      }).join('');
+    }
+    function addDirt(type, room) {
+      if (S.dirt.length >= H.MAX_DIRT) return;
+      const d = H.randomDirt(S.dirt, Math.random, type, room);
+      if (d) { S.dirt.push(d); renderDirt(); renderMeters(); }
+    }
+    function wipe(id) {
+      const d = S.dirt.find((x) => x.id === id);
+      if (!d) return;
+      d.hp--;
+      const fy = d.type === 'web' ? d.y + 26 : d.y - 14;
+      const fxX = d.type === 'web' ? d.x + (d.side === -1 ? -22 : 22) : d.x;
+      if (d.hp > 0) {
+        sound('wipe');
+        fx(fxX, fy, '🫧', 'fx sparkle', 26);
+        renderDirt();
+        return;
+      }
+      S.dirt = S.dirt.filter((x) => x !== d);
+      sound('clean');
+      fx(fxX, fy, '✨', 'fx sparkle', 40);
+      renderDirt();
+      renderMeters();
+      if (!S.dirt.length) {
+        status('Всё чисто! ✨');
+        if (S.req === 'clean') fulfill();
+      }
+      save();
+    }
+
+    // ---------- Просьбы ----------
+    function fulfill() {
+      S.req = null;
+      S.stars++;
+      catches = 0;
+      sound('star');
+      fx(pos.x, pos.y - 70, '⭐', 'fx', 40);
+      hearts(4);
+      $('stars').classList.remove('pop'); void $('stars').offsetWidth; $('stars').classList.add('pop');
+      say('😍', 1500);
+      status(`${S.pet.name}: «Спасибо!» Тебе звёздочка ⭐`);
+      nextReqAt = Date.now() + rnd(18000, 35000);
+      renderMeters(); renderButtons(); save();
+    }
+    function ask(kind, reminder) {
+      S.req = kind;
+      if (!reminder) sound('ask');
+      const n = S.pet.name;
+      if (kind === 'feed') status(`${n} хочет есть! Нажми «🍖 Покормить»`, 5000);
+      if (kind === 'clean') status(`${n} просит убрать в доме 🧽`, 5000);
+      if (kind === 'play') status(`${n} хочет поиграть! Нажми «${P().toy} Играть»`, 5000);
+      refreshBubble(); renderButtons(); save();
+    }
+
+    // ---------- Кормление ----------
+    function openTray() {
+      if (busy || hidden) return;
+      if (!$('tray').hidden) { $('tray').hidden = true; return; }
+      $('tray').innerHTML = P().foods.map(([e, name], i) => `<button data-i="${i}" title="${name}" class="emo">${e}</button>`).join('');
+      $('tray').hidden = false;
+      status(`${P().emoji} Выбери, чем покормить:`);
+    }
+    async function feed(i) {
+      $('tray').hidden = true;
+      const [food, name] = P().foods[i];
+      if (S.food >= 90) {
+        stopWalking();
+        anim('shake');
+        say('🙅');
+        status(`${S.pet.name}: «Спасибо, я не хочу!»`);
+        return;
+      }
+      busy = true;
+      renderButtons();
+      $('food-layer').innerHTML = emo(BOWL_X, F1 - 18, 30, food, ' id="food"');
+      status(`${S.pet.name} бежит к миске…`);
+      await walkTo(BOWL_X - 44, 1);
+      anim('eat');
+      status(`${S.pet.name} ест ${name}. Ням-ням!`);
+      for (let k = 0; k < 4; k++) {
+        sound('chomp');
+        const f = $('food');
+        if (f) f.setAttribute('font-size', 30 - k * 7);
+        await sleep(450);
+      }
+      $('food-layer').innerHTML = '';
+      anim('jump');
+      S.food = Math.min(100, S.food + 45);
+      hearts();
+      if (Math.random() < 0.4) addDirt('crumbs', 'kitchen');
+      busy = false;
+      if (S.req === 'feed') fulfill();
+      else status(`${S.pet.name} ${g('наелся', 'наелась')}! 😋`);
+      renderMeters(); renderButtons(); save();
+      nextWanderAt = Date.now() + 2500;
+    }
+
+    // ---------- Игра с игрушкой ----------
+    function togglePlay() {
+      if (hidden) return;
+      $('tray').hidden = true;
+      if (mode === 'play') { mode = null; status('Поиграли! 👍'); }
+      else { mode = 'play'; stopWalking(); status(`Нажимай в разные места дома — ${S.pet.name} побежит за ${P().toy === '🧶' ? 'клубком' : 'мячиком'}!`, 6000); }
+      renderButtons();
+    }
+    async function throwToy(pt) {
+      if (busy) return;
+      busy = true;
+      renderButtons();
+      sound('throw');
+      const floor = H.floorAt(pt.y);
+      const x = H.clampX(pt.x);
+      const y0 = Math.min(pt.y, H.FLOOR_Y[floor] - 10);
+      const toy = document.createElementNS(NS, 'text');
+      toy.setAttribute('class', 'emo toy-fly');
+      toy.setAttribute('font-size', 30); toy.setAttribute('text-anchor', 'middle');
+      toy.textContent = P().toy;
+      $('fx-layer').appendChild(toy);
+      // Игрушка падает на пол и подпрыгивает.
+      const t0 = performance.now(), fallMs = 380 + (H.FLOOR_Y[floor] - y0) * 1.2;
+      const drop = (t) => {
+        const k = Math.min(1, (t - t0) / fallMs);
+        const y = y0 + (H.FLOOR_Y[floor] - 2 - y0) * (k * k);
+        toy.setAttribute('x', x); toy.setAttribute('y', y);
+        if (k < 1) requestAnimationFrame(drop);
+      };
+      requestAnimationFrame(drop);
+      const ok = await walkTo(x, floor);
+      toy.remove();
+      if (!ok) { busy = false; renderButtons(); return; }
+      anim('jump');
+      sound('voice');
+      say(P().voice);
+      hearts(2);
+      S.fun = Math.min(100, S.fun + 14);
+      catches++;
+      if (Math.random() < 0.22) addDirt('paws');
+      busy = false;
+      if (S.req === 'play' && catches >= 3) fulfill();
+      else if (S.fun >= 100) {
+        mode = null;
+        status(`${S.pet.name} ${g('наигрался', 'наигралась')}! 😊`);
+      } else status(`Поймал${g('', 'а')}! Ещё? ${P().toy}`);
+      renderMeters(); renderButtons(); save();
+    }
+
+    // ---------- Прятки ----------
+    async function startHide(sneaky) {
+      if (busy || hidden) return;
+      $('tray').hidden = true;
+      mode = null;
+      stopWalking();
+      S.req = null;
+      if (!sneaky) {
+        // Ребёнок «закрывает глаза» — отсчёт.
+        $('count').hidden = false;
+        for (const n of ['3', '2', '1']) {
+          $('count-n').innerHTML = `${n}<small>Закрой глаза! 🙈</small>`;
+          sound('miss');
+          await sleep(650);
+        }
+        $('count').hidden = true;
+      }
+      const spot = H.pickSpot(Math.random, lastSpot);
+      lastSpot = spot.id;
+      hidden = { spot, misses: 0 };
+      pos = H.spotPos(spot);
+      placePet();
+      anim(null);
+      $('hide-layer').appendChild(pet);
+      refreshBubble();
+      status(sneaky
+        ? `Ой! ${S.pet.name} ${g('спрятался', 'спряталась')}! Найди ${g('его', 'её')} 🔎`
+        : `Где же ${S.pet.name}? Нажимай на мебель 🔎`, 600000);
+      renderButtons();
+    }
+    function peek() {
+      pos = H.spotPos(hidden.spot, true);
+      placePet();
+    }
+    function tapFurniture(id, el) {
+      el.classList.remove('wig'); void el.getBBox(); el.classList.add('wig');
+      if (!hidden) return;
+      if (id === hidden.spot.id) { found(); return; }
+      hidden.misses++;
+      sound('miss');
+      const b = el.getBBox();
+      fx(b.x + b.width / 2, b.y + 10, '🤷', 'fx', 30);
+      const hints = ['Тут нет…', 'И тут нет. Ищи ещё!', `Ой, кажется, видно ${g('его', 'её')}! 👀`, 'Тут пусто', 'Смотри внимательно 👀', 'Где-то блестит ✨'];
+      status(hints[Math.min(hidden.misses - 1, hints.length - 1)], 600000);
+      if (hidden.misses === 3) peek();
+      if (hidden.misses >= 6) {
+        const s = hidden.spot;
+        fx(s.x, H.FLOOR_Y[s.floor] - 60, '✨', 'fx sparkle', 46);
+      }
+    }
+    function found() {
+      const { spot } = hidden;
+      hidden = null;
+      $('pet-layer').appendChild(pet);
+      pos = { x: H.clampX(spot.x + (spot.x > 380 ? -60 : 60)), y: H.FLOOR_Y[spot.floor] };
+      placePet();
+      anim('jump');
+      sound('voice');
+      say(P().voice);
+      S.fun = Math.min(100, S.fun + 20);
+      S.stars++;
+      sound('star');
+      fx(pos.x, pos.y - 70, '⭐', 'fx', 40);
+      hearts(4);
+      confetti();
+      $('stars').classList.remove('pop'); void $('stars').offsetWidth; $('stars').classList.add('pop');
+      status(`Ура! ${S.pet.name} ${g('нашёлся', 'нашлась')} ${spot.where}! ⭐`);
+      nextReqAt = Date.now() + rnd(18000, 35000);
+      nextWanderAt = Date.now() + 3000;
+      renderMeters(); renderButtons(); save();
+    }
+    function confetti() {
+      const box = $('confetti');
+      const bits = ['🎉', '⭐', '✨', P().emoji, '💛'];
+      for (let k = 0; k < 30; k++) {
+        const s = document.createElement('span');
+        s.textContent = bits[k % bits.length];
+        s.style.left = Math.random() * 100 + 'vw';
+        s.style.animationDuration = 2.2 + Math.random() * 2 + 's';
+        s.style.animationDelay = Math.random() * 0.6 + 's';
+        box.appendChild(s);
+      }
+      setTimeout(() => { box.innerHTML = ''; }, 5000);
+    }
+
+    // ---------- Нажатия ----------
+    function svgPoint(e) {
+      const p = svg.createSVGPoint();
+      p.x = e.clientX; p.y = e.clientY;
+      return p.matrixTransform(svg.getScreenCTM().inverse());
+    }
+    svg.addEventListener('click', (e) => {
+      unlockAudio();
+      const dirt = e.target.closest('[data-dirt]');
+      if (dirt) { wipe(dirt.dataset.dirt); return; }
+      if (e.target.closest('#bubble') && S.req && !hidden) {
+        if (S.req === 'feed') openTray();
+        if (S.req === 'play' && mode !== 'play') togglePlay();
+        if (S.req === 'clean') highlightDirt();
+        return;
+      }
+      if (e.target.closest('#pet')) {
+        if (hidden) { found(); return; }
+        if (busy) return;
+        stopWalking();
+        anim('jump');
+        sound('voice');
+        say(P().voice);
+        hearts(2);
+        S.fun = Math.min(100, S.fun + 3);
+        renderMeters();
+        nextWanderAt = Date.now() + 2500;
+        return;
+      }
+      if (mode === 'play') { throwToy(svgPoint(e)); return; }
+      const f = e.target.closest('[data-f]');
+      if (f) tapFurniture(f.dataset.f, f);
+    });
+
+    function highlightDirt() {
+      $('tray').hidden = true;
+      if (!S.dirt.length) { status('Всё чисто! ✨'); return; }
+      status('Нажимай на грязь, пока она не исчезнет 🧽');
+      document.querySelectorAll('.dirt').forEach((el) => { el.classList.remove('hl'); void el.getBBox(); el.classList.add('hl'); });
+    }
+
+    $('act-feed').onclick = () => { unlockAudio(); openTray(); };
+    $('tray').onclick = (e) => { const b = e.target.closest('[data-i]'); if (b) feed(+b.dataset.i); };
+    $('act-clean').onclick = () => { unlockAudio(); highlightDirt(); };
+    $('act-play').onclick = () => { unlockAudio(); togglePlay(); };
+    $('act-hide').onclick = () => { unlockAudio(); startHide(false); };
+
+    // ---------- Окна ----------
+    function showWelcome() {
+      const p = P();
+      $('w-emoji').textContent = p.emoji;
+      $('w-title').textContent = `Знакомься: ${S.pet.name}!`;
+      $('w-text').textContent = `${S.pet.name} — ${p.who}, ${g('он', 'она')} живёт в этом доме. Корми, играй, убирай комнаты — и ищи, когда ${S.pet.name} прячется!`;
+      $('welcome').hidden = false;
+    }
+    $('btn-welcome').onclick = () => { unlockAudio(); $('welcome').hidden = true; sound('voice'); say(P().voice); };
+    $('btn-help').onclick = () => { $('help').hidden = false; };
+    $('btn-help-close').onclick = () => { $('help').hidden = true; };
+    $('btn-menu').onclick = () => { $('menu').hidden = false; };
+    $('btn-menu-close').onclick = () => { $('menu').hidden = true; };
+    $('btn-rename').onclick = () => {
+      const n = (prompt('Как зовут питомца?', S.pet.name) || '').trim().slice(0, 14);
+      if (n) { S.pet.name = n; renderMeters(); save(); }
+      $('menu').hidden = true;
+    };
+    $('btn-newpet').onclick = () => {
+      $('menu').hidden = true;
+      $('np-emoji').textContent = P().emoji;
+      $('np-text').textContent = `${S.pet.name} поедет в гости к бабушке, а в доме поселится кто-то новый.`;
+      $('newpet').hidden = false;
+    };
+    $('btn-np-no').onclick = () => { $('newpet').hidden = true; };
+    $('btn-np-yes').onclick = () => {
+      $('newpet').hidden = true;
+      if (hidden) { hidden = null; $('pet-layer').appendChild(pet); }
+      S.pet = H.newPet(Math.random, S.pet.type);
+      Object.assign(S, { food: 70, fun: 70, req: null });
+      mode = null; busy = false; catches = 0;
+      stopWalking();
+      pos = { x: 200, y: F1 };
+      placePet();
+      renderAll();
+      save();
+      showWelcome();
+    };
+    for (const id of ['help', 'menu', 'newpet']) {
+      $(id).addEventListener('click', (e) => { if (e.target === $(id)) $(id).hidden = true; });
+    }
+
+    // ---------- Жизнь в доме: каждую секунду ----------
+    const TIPS = () => [`Нажми на ${P().emoji}, чтобы погладить 👋`, 'Найди грязь и убери её 🧽', `Поиграй: брось игрушку ${P().toy}`, `${S.pet.name} гуляет по дому`];
+    function tick() {
+      if (document.hidden) return;
+      now = Date.now();
+      H.decay(S, 1);
+      if (now > nextDirtAt) {
+        addDirt();
+        nextDirtAt = now + rnd(30000, 55000);
+      }
+      const free = !hidden && !busy && mode !== 'play' && $('tray').hidden && $('count').hidden;
+      if (!S.req && free && now > nextReqAt) {
+        const kind = H.chooseRequest({ food: S.food, fun: S.fun, dirt: S.dirt.length });
+        if (kind === 'hide') startHide(true);
+        else ask(kind);
+        nextReqAt = now + rnd(25000, 40000);
+      }
+      if (free && now > nextWanderAt) {
+        const room = H.ROOMS[Math.floor(Math.random() * H.ROOMS.length)];
+        walkTo(rnd(room.x0 + 40, room.x1 - 40), room.floor);
+        nextWanderAt = now + rnd(5000, 11000);
+      }
+      if (now > statusHold && now > nextTipAt && !hidden) {
+        if (S.req) ask(S.req, true);
+        else status(TIPS()[Math.floor(Math.random() * TIPS().length)], 0);
+        nextTipAt = now + 9000;
+      }
+      refreshBubble();
+      renderMeters();
+      renderButtons();
+      if (Math.floor(now / 1000) % 5 === 0) save();
+    }
+    setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+    window.addEventListener('pagehide', save);
+
+    function renderAll() { renderMeters(); renderDirt(); renderButtons(); refreshBubble(); }
+    placePet();
+    renderAll();
+    status(`Привет! Это ${S.pet.name} ${P().emoji}`);
+    if (fresh) showWelcome();
+    save();
+  })();
+  </script>
+</body>
+</html>
