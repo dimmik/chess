@@ -60,15 +60,20 @@
     .seek #house [data-f]:hover { filter: brightness(1.06); }
     .wig { animation: wig .5s; transform-box: fill-box; transform-origin: 50% 100%; }
     @keyframes wig { 20% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } 80% { transform: rotate(-1.5deg); } }
-    #pet .pb { transform-box: fill-box; transform-origin: 50% 100%; }
-    #pet .pb.walk { animation: hop .32s infinite; }
-    #pet .pb.climb { animation: climb .4s infinite; }
-    #pet .pb.eat { animation: chomp .35s infinite; }
-    #pet .pb.jump { animation: jump .6s; }
-    #pet .pb.shake { animation: shake .5s; }
-    #pet .pb.wash { animation: wash .5s ease-in-out infinite; }
+    .pb { transform-box: fill-box; transform-origin: 50% 100%; }
+    .pb.walk { animation: hop .32s infinite; }
+    .pb.climb { animation: climb .4s infinite; }
+    .pb.eat { animation: chomp .35s infinite; }
+    .pb.jump { animation: jump .6s; }
+    .pb.shake { animation: shake .5s; }
+    .pb.wash { animation: wash .5s ease-in-out infinite; }
     @keyframes wash { 25% { transform: rotate(-7deg) translateY(-3px); } 75% { transform: rotate(7deg) translateY(-3px); } }
-    #pet .pb.sleep { animation: breathe 2.4s ease-in-out infinite; }
+    .tvrun { animation: tvrun 2.2s linear infinite; }
+    .tvrun.late { animation-delay: -.35s; }
+    @keyframes tvrun { from { transform: translateX(-46px); } to { transform: translateX(46px); } }
+    .guest-in { animation: guestin .5s ease-out; transform-box: fill-box; transform-origin: 50% 100%; }
+    @keyframes guestin { from { transform: scale(.2); opacity: 0; } }
+    .pb.sleep { animation: breathe 2.4s ease-in-out infinite; }
     @keyframes breathe { 0%, 100% { transform: rotate(-10deg) scale(1, .96); } 50% { transform: rotate(-10deg) scale(1.04, 1); } }
     #night { opacity: 0; transition: opacity 1s; }
     #night.on { opacity: .3; }
@@ -197,6 +202,7 @@
         <li>🙈 <b>Прятки</b> — питомец спрячется, а ты ищи: нажимай на мебель. Иногда он прячется и сам!</li>
         <li>💬 Над питомцем появляется облачко — это просьба. Выполни её и получи ⭐.</li>
         <li>🛁 Нажми на ванну — питомец пойдёт купаться.</li>
+        <li>🛋️ Нажми на диван — питомец сядет и займётся чем-нибудь интересным: посмотрит мультик, почитает, споёт, а иногда к нему придут в гости.</li>
         <li>🛏️ Устал — нажми на кровать, и питомец ляжет спать. Если совсем устанет, уснёт сам.</li>
         <li>👋 Нажми на питомца, чтобы погладить (или разбудить).</li>
       </ul>
@@ -309,7 +315,10 @@
         <rect x="270" y="${F1 - 60}" width="12" height="10" fill="#455a64"/>
         <rect x="242" y="${F1 - 108}" width="68" height="50" rx="7" fill="#37474f"/>
         <rect x="248" y="${F1 - 102}" width="56" height="38" rx="4" fill="#4fc3f7"/>
-        <circle cx="266" cy="${F1 - 86}" r="7" fill="#fff59d"/><path d="M250 ${F1 - 66} l14 -14 l12 10 l10 -8 l16 12 z" fill="#81c784"/></g>`;
+        <circle cx="266" cy="${F1 - 86}" r="7" fill="#fff59d"/><path d="M250 ${F1 - 66} l14 -14 l12 10 l10 -8 l16 12 z" fill="#81c784"/>
+        <g id="tv-show" clip-path="url(#tvClip)" style="display:none"><rect x="248" y="${F1 - 102}" width="56" height="38" rx="4" fill="#283593"/>
+          <rect x="248" y="${F1 - 70}" width="56" height="6" fill="#43a047"/>
+          ${emo(276, F1 - 71, 18, '🐭', ' class="emo tvrun"')}${emo(258, F1 - 71, 20, '🐱', ' class="emo tvrun late"')}</g></g>`;
       // Кухня: плита, стол со скатертью, миска, холодильник.
       s += `<g data-f="stove">
         <rect x="396" y="${F1 - 92}" width="68" height="92" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="3"/>
@@ -373,6 +382,7 @@
         <pattern id="pCheck" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="#fff"/><rect width="10" height="10" fill="#ef9a9a"/><rect x="10" y="10" width="10" height="10" fill="#ef9a9a"/></pattern>
         <pattern id="pStars" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="#90caf9"/><path d="M15 7 l2.5 5 5.5 .8 -4 3.9 1 5.4 -5 -2.6 -5 2.6 1 -5.4 -4 -3.9 5.5 -.8z" fill="#fff59d"/></pattern>
         <pattern id="pWicker" width="12" height="10" patternUnits="userSpaceOnUse"><rect width="12" height="10" fill="#d7a86e"/><path d="M0 5 q3 -4 6 0 t6 0" stroke="#b9874f" stroke-width="2" fill="none"/></pattern>
+        <clipPath id="tvClip"><rect x="248" y="${F1 - 102}" width="56" height="38" rx="4"/></clipPath>
         <pattern id="pWood" width="60" height="14" patternUnits="userSpaceOnUse"><rect width="60" height="14" fill="#c8955c"/><path d="M0 1 H60 M30 1 V14" stroke="#b07c45" stroke-width="2"/></pattern>
       </defs>`;
       // Небо, солнце, облака, трава.
@@ -533,6 +543,8 @@
       if (kind === 'clean') [784, 1047, 1319].forEach((f, k) => tone(f, k * 0.07, 0.15, 'sine', 0.08));
       if (kind === 'throw') tone(440, 0, 0.12, 'sine', 0.06);
       if (kind === 'miss') tone(220, 0, 0.15, 'sine', 0.06);
+      if (kind === 'song') [523, 587, 659, 523, 659, 784].forEach((f, k) => tone(f, k * 0.22, 0.2, 'triangle', 0.07));
+      if (kind === 'laugh') [700, 600, 700, 600].forEach((f, k) => tone(f, k * 0.09, 0.08, 'square', 0.03));
       if (kind === 'splash') tone(280 + Math.random() * 160, 0, 0.09, 'sine', 0.06);
       if (kind === 'star') [523, 659, 784, 1047].forEach((f, k) => tone(f, k * 0.11, 0.2, 'triangle', 0.12));
     }
@@ -833,6 +845,175 @@
       renderMeters(); renderButtons(); save();
     }
 
+    // ---------- Диван ----------
+    let sofaTok = 0, lastActivity = null, guestEl = null;
+    const sofaAlive = (tok) => tok === sofaTok;
+    // Несколько реплик подряд в облачке: [[текст, мс], …]; false — если занятие прервали.
+    async function sayLines(tok, lines) {
+      for (const [t, ms] of lines) {
+        say(t, ms);
+        await sleep(ms);
+        if (!sofaAlive(tok)) return false;
+      }
+      return true;
+    }
+    // Гость: такой же зверь, как питомец, со своим облачком.
+    function makeGuest(emoji) {
+      const el = document.createElementNS(NS, 'g');
+      el.innerHTML = `<g class="pb"><text class="emo" y="-8" font-size="52" text-anchor="middle">${emoji}</text></g>` +
+        `<g class="gb" style="display:none" transform="translate(0,-70)"><rect y="-46" height="40" rx="12" fill="#fff" stroke="#81c784" stroke-width="3"/><text class="emo" y="-19" font-size="17" text-anchor="middle"></text></g>`;
+      el.setAttribute('transform', `translate(${H.GUEST_X},${F1})`);
+      $('pet-layer').insertBefore(el, pet);
+      return el;
+    }
+    function guestSay(el, text) {
+      const gb = el.querySelector('.gb'), t = gb.querySelector('text'), r = gb.querySelector('rect');
+      if (!text) { gb.style.display = 'none'; return; }
+      t.textContent = text;
+      gb.style.display = '';
+      const w = Math.max(40, t.getComputedTextLength() + 24);
+      r.setAttribute('x', -w / 2); r.setAttribute('width', w);
+    }
+    const bump = (el) => { const b = el.querySelector('.pb'); b.classList.remove('jump'); void b.getBBox(); b.classList.add('jump'); };
+    // Игрушка летит дугой из одной точки в другую.
+    function arc(el, x0, y0, x1, y1, ms) {
+      return new Promise((res) => {
+        const t0 = performance.now();
+        const step = (t) => {
+          const k = Math.min(1, (t - t0) / ms);
+          el.setAttribute('x', x0 + (x1 - x0) * k);
+          el.setAttribute('y', y0 + (y1 - y0) * k - Math.sin(Math.PI * k) * 70);
+          if (k < 1) requestAnimationFrame(step); else res();
+        };
+        requestAnimationFrame(step);
+      });
+    }
+    function endSofa() {
+      sofaTok++;
+      $('tv-show').style.display = 'none';
+      if (guestEl) { guestEl.remove(); guestEl = null; }
+    }
+
+    const ACTIVITY = {
+      async guest(tok, n) {
+        const fr = H.newPet(Math.random, S.pet.type), fi = H.petInfo(fr.type);
+        const came = fr.g === 'f' ? 'пришла' : 'пришёл';
+        sound('ask');
+        status(`Тук-тук! В гости ${came} ${fi.emoji} ${fr.name}!`, 15000);
+        guestEl = makeGuest(fi.emoji);
+        guestEl.querySelector('.pb').classList.add('guest-in');
+        fx(H.GUEST_X, F1 - 40, '✨', 'fx sparkle', 44);
+        guestSay(guestEl, 'Привет!');
+        await sleep(1100);
+        if (!sofaAlive(tok)) return;
+        // Питомец спрыгивает с дивана, и они играют в мячик.
+        pos = { x: 150, y: F1 };
+        placePet();
+        anim('jump');
+        say(P().voice, 900);
+        guestSay(guestEl, fi.voice);
+        status(`${n} и ${fr.name} играют в мячик! ${P().toy}`, 15000);
+        await sleep(900);
+        if (!sofaAlive(tok)) return;
+        guestSay(guestEl, '');
+        const ball = document.createElementNS(NS, 'text');
+        ball.setAttribute('class', 'emo'); ball.setAttribute('font-size', 26); ball.setAttribute('text-anchor', 'middle');
+        ball.textContent = P().toy;
+        $('fx-layer').appendChild(ball);
+        const ends = [[pos.x + 24, F1 - 40], [H.GUEST_X - 24, F1 - 40]];
+        for (let k = 0; k < 6; k++) {
+          const [a, b] = k % 2 ? [ends[1], ends[0]] : [ends[0], ends[1]];
+          sound('throw');
+          await arc(ball, a[0], a[1], b[0], b[1], 650);
+          if (!sofaAlive(tok)) { ball.remove(); return; }
+          if (k % 2) { anim('jump'); } else bump(guestEl);
+        }
+        ball.remove();
+        hearts(3);
+        fx(H.GUEST_X, F1 - 70, '❤️');
+        guestSay(guestEl, 'Пока! 👋');
+        say('👋', 1400);
+        status(`Поиграли! ${fr.name} ${fr.g === 'f' ? 'пошла' : 'пошёл'} домой 👋`, 6000);
+        await sleep(1400);
+        if (!sofaAlive(tok)) return;
+        fx(H.GUEST_X, F1 - 40, '✨', 'fx sparkle', 44);
+        guestEl.remove();
+        guestEl = null;
+        S.fun = Math.min(100, S.fun + 25);
+      },
+      async tv(tok, n) {
+        $('tv-show').style.display = '';
+        status(`${n} смотрит мультик 📺`, 15000);
+        sound('laugh');
+        await sayLines(tok, [['📺', 1500], ['😂', 1300], ['😮', 1300], ['😂', 1500], ['😊', 1200]]);
+        $('tv-show').style.display = 'none';
+        S.fun = Math.min(100, S.fun + 15);
+      },
+      async popcorn(tok, n) {
+        $('tv-show').style.display = '';
+        status(`${n} ест попкорн и смотрит мультик 🍿`, 15000);
+        for (let k = 0; k < 6; k++) {
+          say(k % 2 ? '😂' : '🍿', 1100);
+          sound(k % 2 ? 'laugh' : 'chomp');
+          await sleep(1100);
+          if (!sofaAlive(tok)) return;
+        }
+        $('tv-show').style.display = 'none';
+        S.fun = Math.min(100, S.fun + 12);
+        S.food = Math.min(100, S.food + 8);
+        if (Math.random() < 0.5) addDirt('crumbs', 'living'); // накрошил попкорна
+      },
+      async book(tok, n) {
+        status(`${n} читает книжку 📖`, 15000);
+        await sayLines(tok, [['📖', 1800], ['🤔', 1400], ['📖', 1600], ['😮', 1300], ['😊', 1300]]);
+        S.fun = Math.min(100, S.fun + 10);
+      },
+      async music(tok, n) {
+        status(`${n} поёт песенку 🎤`, 15000);
+        sound('song');
+        for (let k = 0; k < 8; k++) {
+          say(k % 2 ? '🎶' : '🎤', 800);
+          fx(pos.x + rnd(-40, 40), pos.y - 70, k % 2 ? '🎵' : '🎶', 'fx', 26);
+          if (k === 4) sound('song');
+          await sleep(800);
+          if (!sofaAlive(tok)) return;
+        }
+        S.fun = Math.min(100, S.fun + 12);
+      },
+    };
+
+    async function sitOnSofa() {
+      if (busy || hidden || sleeping) return;
+      endSofa();
+      const tok = sofaTok;
+      const n = S.pet.name;
+      $('tray').hidden = true;
+      mode = null;
+      busy = true;
+      renderButtons();
+      status(`${n} идёт к дивану… 🛋️`);
+      const ok = await walkTo(H.SOFA.x, H.SOFA.floor);
+      if (!ok || !sofaAlive(tok)) { busy = false; renderButtons(); return; }
+      // Запрыгивает на диван.
+      pos = { x: H.SOFA.x, y: F1 + H.SOFA.dy };
+      placePet();
+      anim('jump');
+      await sleep(600);
+      if (!sofaAlive(tok)) return;
+      const act = H.pickActivity(Math.random, lastActivity);
+      lastActivity = act;
+      await ACTIVITY[act](tok, n);
+      if (!sofaAlive(tok)) return;
+      // Слезает с дивана.
+      if (pos.y !== F1) { pos = { x: H.SOFA.x + 40, y: F1 }; placePet(); anim('jump'); }
+      hearts(2);
+      busy = false;
+      if (act !== 'guest') status(`${n}: «Было здорово!» 😊`);
+      nextWanderAt = Date.now() + 3000;
+      nextReqAt = Math.max(nextReqAt, Date.now() + 10000);
+      renderMeters(); renderButtons(); save();
+    }
+
     // ---------- Прятки ----------
     async function startHide(sneaky) {
       if (busy || hidden || sleeping) return;
@@ -951,6 +1132,12 @@
       }
       if (mode === 'play') { throwToy(svgPoint(e)); return; }
       const f = e.target.closest('[data-f]');
+      if (f && f.dataset.f === 'sofa' && !hidden) {
+        if (sleeping) return;
+        f.classList.remove('wig'); void f.getBBox(); f.classList.add('wig');
+        sitOnSofa();
+        return;
+      }
       if (f && f.dataset.f === 'tub' && !hidden) {
         if (sleeping) return;
         f.classList.remove('wig'); void f.getBBox(); f.classList.add('wig');
@@ -1008,10 +1195,12 @@
       if (hidden) { hidden = null; $('pet-layer').appendChild(pet); }
       if (sleeping) { clearInterval(sleeping.zzz); sleeping = null; $('night').classList.remove('on'); }
       bathTok++; // прервать купание
+      endSofa(); // и занятие на диване
       $('pet-layer').appendChild(pet);
       S.pet = H.newPet(Math.random, S.pet.type);
       Object.assign(S, { food: 70, fun: 70, energy: 80, req: null });
       mode = null; busy = false; catches = 0;
+      nextReqAt = Date.now() + 15000; // сначала познакомиться
       stopWalking();
       pos = { x: 200, y: F1 };
       placePet();
