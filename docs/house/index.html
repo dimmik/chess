@@ -128,6 +128,11 @@
       .stage { grid-column: 1; grid-row: 1 / 4; margin: 6px 0 6px 6px; }
       .dock { grid-column: 2; grid-row: 3; display: flex; flex-direction: column; justify-content: flex-end; }
       .actions { grid-template-columns: repeat(2, 1fr); }
+      .meters { display: grid; grid-template-columns: 1fr 1fr; }
+      .bar { gap: 5px; }
+      .title { font-size: 17px; }
+      .stars { font-size: 15px; padding: 4px 7px; }
+      .icon-btn { padding: 6px 8px; font-size: 16px; }
     }
 
     /* ---------- Окна ---------- */
@@ -233,7 +238,7 @@
     </div>
   </div>
 
-  <div class="overlay" id="count" hidden><div class="countdown" id="count-n">3</div></div>
+  <div class="overlay" id="count" hidden style="background: rgba(25, 18, 12, .88)"><div class="countdown" id="count-n">3</div></div>
   <div id="confetti" aria-hidden="true"></div>
 
   <script src="house.js"></script>
@@ -273,15 +278,17 @@
     let nextReqAt = now + 8000, nextDirtAt = now + 20000, nextWanderAt = now + 3000, nextTipAt = 0;
 
     // Пока игры не было, время шло: питомец проголодался, в доме набралась грязь.
-    (function catchUp() {
+    function catchUp() {
       const away = Math.max(0, (Date.now() - (S.t || Date.now())) / 1000);
       H.decay(S, Math.min(away, 300));
       for (let k = Math.min(3, Math.floor(away / 150)); k > 0 && S.dirt.length < H.MAX_DIRT; k--) {
         const d = H.randomDirt(S.dirt);
         if (d) S.dirt.push(d);
       }
-      if (fresh) for (let k = 0; k < 2; k++) { const d = H.randomDirt(S.dirt); if (d) S.dirt.push(d); }
-    })();
+      S.t = Date.now();
+    }
+    catchUp();
+    if (fresh) for (let k = 0; k < 2; k++) { const d = H.randomDirt(S.dirt); if (d) S.dirt.push(d); }
 
     // ---------- Рисуем дом ----------
     const emo = (x, y, size, ch, extra = '') => `<text class="emo" x="${x}" y="${y}" font-size="${size}" text-anchor="middle"${extra}>${ch}</text>`;
@@ -446,8 +453,9 @@
     $('pet-layer').appendChild(pet);
     const petBody = pet.querySelector('.pb');
     const placePet = () => pet.setAttribute('transform', `translate(${pos.x.toFixed(1)},${pos.y.toFixed(1)})`);
+    const PET_ANIMS = ['walk', 'climb', 'eat', 'jump', 'shake', 'wash', 'sleep'];
     function anim(cls) {
-      petBody.classList.remove('walk', 'climb', 'eat', 'jump', 'shake');
+      petBody.classList.remove(...PET_ANIMS);
       if (cls) { void petBody.getBBox(); petBody.classList.add(cls); }
     }
 
@@ -569,7 +577,7 @@
       const lock = !!hidden || busy || !!sleeping;
       $('act-feed').disabled = lock || mode === 'play';
       $('act-hide').disabled = lock;
-      $('act-play').disabled = !!hidden || !!sleeping;
+      $('act-play').disabled = !!hidden || !!sleeping || (busy && mode !== 'play'); // «Хватит» — можно всегда
       $('act-clean').disabled = !!hidden || !!sleeping;
       $('act-play').classList.toggle('on', mode === 'play');
       $('play-label').textContent = mode === 'play' ? 'Хватит' : 'Играть';
@@ -650,6 +658,7 @@
     function ask(kind, reminder) {
       S.req = kind;
       if (!reminder) sound('ask');
+      if (!reminder && kind === 'play') catches = 0; // считаем броски с момента просьбы
       const n = S.pet.name;
       if (kind === 'feed') status(`${n} хочет есть! Нажми «🍖 Покормить»`, 5000);
       if (kind === 'clean') status(`${n} просит убрать в доме 🧽`, 5000);
@@ -669,7 +678,7 @@
     async function feed(i) {
       $('tray').hidden = true;
       const [food, name] = P().foods[i];
-      if (S.food >= 90) {
+      if (S.food >= 90 && S.req !== 'feed') { // сам попросил — съест в любом случае
         stopWalking();
         anim('shake');
         say('🙅');
@@ -680,7 +689,7 @@
       renderButtons();
       $('food-layer').innerHTML = emo(BOWL_X, F1 - 18, 30, food, ' id="food"');
       status(`${S.pet.name} бежит к миске…`);
-      await walkTo(BOWL_X - 44, 1);
+      if (!(await walkTo(BOWL_X - 44, 1))) { $('food-layer').innerHTML = ''; busy = false; renderButtons(); return; }
       anim('eat');
       status(`${S.pet.name} ест ${name}. Ням-ням!`);
       for (let k = 0; k < 4; k++) {
@@ -703,7 +712,7 @@
 
     // ---------- Игра с игрушкой ----------
     function togglePlay() {
-      if (hidden) return;
+      if (hidden || sleeping || (busy && mode !== 'play')) return;
       $('tray').hidden = true;
       if (mode === 'play') { mode = null; status('Поиграли! 👍'); }
       else { mode = 'play'; stopWalking(); status(`Нажимай в разные места дома — ${S.pet.name} побежит за ${P().toy === '🧶' ? 'клубком' : 'мячиком'}!`, 6000); }
@@ -754,7 +763,7 @@
     async function goSleep(auto) {
       if (busy || hidden || sleeping) return;
       const n = S.pet.name;
-      if (S.energy >= 90 && !auto) {
+      if (S.energy >= 90 && !auto && S.req !== 'sleep') {
         stopWalking();
         anim('shake');
         say('🙅');
@@ -1031,6 +1040,7 @@
         }
         $('count').hidden = true;
       }
+      if (sneaky) fx(pos.x, pos.y - 30, '💨', 'fx sparkle', 44); // юрк!
       const spot = H.pickSpot(Math.random, lastSpot);
       lastSpot = spot.id;
       hidden = { spot, misses: 0 };
@@ -1196,6 +1206,7 @@
       if (sleeping) { clearInterval(sleeping.zzz); sleeping = null; $('night').classList.remove('on'); }
       bathTok++; // прервать купание
       endSofa(); // и занятие на диване
+      $('food-layer').innerHTML = '';
       $('pet-layer').appendChild(pet);
       S.pet = H.newPet(Math.random, S.pet.type);
       Object.assign(S, { food: 70, fun: 70, energy: 80, req: null });
@@ -1226,7 +1237,8 @@
         addDirt();
         nextDirtAt = now + rnd(30000, 55000);
       }
-      const free = !hidden && !busy && !sleeping && mode !== 'play' && $('tray').hidden && $('count').hidden;
+      const windowOpen = ['welcome', 'help', 'menu', 'newpet', 'count'].some((id) => !$(id).hidden);
+      const free = !hidden && !busy && !sleeping && mode !== 'play' && $('tray').hidden && !windowOpen;
       if (free && S.energy <= 0) goSleep(true); // совсем устал — засыпает сам
       if (!S.req && free && now > nextReqAt) {
         const kind = H.chooseRequest({ food: S.food, fun: S.fun, energy: S.energy, dirt: S.dirt.length });
@@ -1250,7 +1262,12 @@
       if (Math.floor(now / 1000) % 5 === 0) save();
     }
     setInterval(tick, 1000);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+    // Вкладку свернули и вернулись — время шло так же, как если бы игру закрыли.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { save(); return; }
+      catchUp();
+      renderAll();
+    });
     window.addEventListener('pagehide', save);
 
     function renderAll() { renderMeters(); renderDirt(); renderButtons(); refreshBubble(); }
