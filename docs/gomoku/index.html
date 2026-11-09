@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Гомоку</title>
+  <meta name="description" content="Гомоку и рэндзю: пять в ряд против компьютера или вдвоём, правила с запретами и уроки от 15 кю до 3 дана.">
+  <meta name="theme-color" content="#d9a45b">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Гомоку">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #3b2a1a;
+      --muted: #7b6550;
+      --accent: #ff8a3d;
+      --accent-dark: #e8701f;
+      --wood: #e2b26b;
+      --wood-dark: #c8914a;
+      --good: #2e9d5b;
+      --bad: #d64545;
+      --vh: 100vh;
+      color-scheme: light;
+    }
+    @supports (height: 100dvh) { :root { --vh: 100dvh; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      height: var(--vh); display: flex; flex-direction: column; overflow: hidden;
+      font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      color: var(--ink); background: linear-gradient(160deg, #f7ead6, #efe2cf);
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+    }
+    button { font: inherit; }
+    [hidden] { display: none !important; }
+
+    /* ---------- Шапка ---------- */
+    .bar { display: flex; align-items: center; gap: 8px; padding: max(8px, env(safe-area-inset-top)) 10px 6px; }
+    .title { font-weight: 900; font-size: 20px; white-space: nowrap; }
+    .tabs { display: flex; gap: 4px; background: rgba(255,255,255,.6); border-radius: 14px; padding: 3px; flex: 1; max-width: 320px; margin: 0 auto; }
+    .tab { flex: 1; border: none; background: transparent; border-radius: 11px; padding: 7px 6px; font-weight: 800; font-size: 15px; cursor: pointer; color: var(--muted); }
+    .tab.on { background: #fff; color: var(--ink); box-shadow: 0 2px 4px rgba(0,0,0,.08); }
+    .icon-btn { border: none; background: #fff; border-radius: 12px; padding: 7px 11px; font-size: 18px; cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.08); }
+
+    /* ---------- Экран с доской ---------- */
+    .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .info { padding: 0 12px; text-align: center; }
+    .status { font-weight: 800; font-size: 16px; min-height: 1.5em; line-height: 1.35; }
+    .sub { font-size: 13px; color: var(--muted); font-weight: 700; min-height: 1.2em; }
+    .board-wrap { flex: 1; min-height: 0; display: grid; place-items: center; padding: 6px; }
+    #board { display: block; touch-action: manipulation; cursor: pointer; border-radius: 10px; box-shadow: 0 8px 24px rgba(80,50,10,.25); }
+    .actions { display: flex; gap: 8px; padding: 6px 10px max(10px, env(safe-area-inset-bottom)); }
+    .btn {
+      flex: 1; border: none; border-radius: 14px; padding: 11px 8px; font-weight: 900; font-size: 15px; cursor: pointer;
+      background: #fff; color: var(--ink); box-shadow: 0 3px 0 rgba(0,0,0,.12); text-decoration: none; text-align: center; display: block;
+    }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-dark); }
+    .btn:disabled { opacity: .45; cursor: default; }
+    .btn:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+    .stone-ic { display: inline-block; width: .9em; height: .9em; border-radius: 50%; vertical-align: -.1em; margin-right: .2em; }
+    .stone-ic.b { background: radial-gradient(circle at 35% 30%, #666, #111); }
+    .stone-ic.w { background: radial-gradient(circle at 35% 30%, #fff, #ccc); box-shadow: inset 0 0 0 1px #aaa; }
+    .think { display: inline-block; animation: think 1s infinite; }
+    @keyframes think { 50% { opacity: .3; } }
+    .ok { color: var(--good); }
+    .no { color: var(--bad); }
+
+    /* ---------- Уроки ---------- */
+    .lessons { flex: 1; overflow: auto; padding: 4px 12px max(16px, env(safe-area-inset-bottom)); }
+    .rank-card { background: #fff; border-radius: 18px; padding: 12px 14px; margin: 4px 0 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 3px 10px rgba(0,0,0,.06); }
+    .rank-card .big { font-size: 34px; }
+    .rank-card b { font-size: 20px; }
+    .lesson { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; border: none; background: #fff; border-radius: 16px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.08); color: var(--ink); }
+    .lesson .rk { min-width: 58px; text-align: center; font-weight: 900; font-size: 13px; background: #f3e4cc; border-radius: 10px; padding: 6px 4px; }
+    .lesson .tt { flex: 1; font-weight: 800; font-size: 16px; }
+    .lesson .tt small { display: block; color: var(--muted); font-weight: 700; font-size: 12px; }
+    .lesson .st { font-size: 20px; }
+    .lesson.done .rk { background: #cdeed8; }
+    .lesson.locked { opacity: .5; cursor: default; }
+    .theory { margin: 0 12px 4px; background: #fff; border-radius: 14px; padding: 8px 12px; font-size: 14px; line-height: 1.4; max-height: 7.5em; overflow: auto; }
+    .theory h3 { margin: 0 0 4px; font-size: 16px; }
+    .theory.small { max-height: 2.4em; overflow: hidden; cursor: pointer; }
+    .dots { display: flex; gap: 6px; justify-content: center; margin: 3px 0; }
+    .dots span { width: 10px; height: 10px; border-radius: 50%; background: #d8c4a5; }
+    .dots span.on { background: var(--good); }
+    .dots span.cur { box-shadow: 0 0 0 2px var(--accent); }
+
+    /* ---------- Окна ---------- */
+    .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(40, 25, 10, .45); z-index: 10; animation: fade .2s; }
+    @keyframes fade { from { opacity: 0; } }
+    .modal { width: min(100%, 440px); max-height: calc(var(--vh) - 32px); overflow: auto; background: #fff; border-radius: 22px; padding: 18px 16px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+    .modal h2 { margin: 2px 0 10px; font-size: 22px; text-align: center; }
+    .modal p { color: var(--muted); margin: 6px 0 10px; }
+    .field { margin: 10px 0; }
+    .field > label { display: block; font-weight: 800; margin-bottom: 5px; }
+    .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+    .seg button { border: 2px solid #eadbc4; background: #fbf6ef; border-radius: 12px; padding: 8px 4px; font-weight: 800; font-size: 14px; cursor: pointer; color: var(--ink); }
+    .seg button.on { border-color: var(--accent); background: #fff1e4; }
+    .levels button { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; padding: 6px 2px; }
+    .levels button span { font-size: 22px; }
+    .check { display: flex; gap: 8px; align-items: flex-start; margin: 7px 0; font-weight: 700; font-size: 15px; cursor: pointer; }
+    .check input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
+    .check small { display: block; color: var(--muted); font-weight: 600; font-size: 12px; }
+    .row { display: flex; gap: 8px; margin-top: 14px; }
+    .menu-list { display: grid; gap: 8px; }
+    .toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: rgba(40, 25, 10, .92); color: #fff; padding: 9px 14px; border-radius: 12px; font-weight: 800; font-size: 14px; z-index: 20; pointer-events: none; max-width: 90vw; text-align: center; animation: fade .2s; }
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+    #confetti span { position: absolute; top: -40px; font-size: 26px; animation: fall linear forwards; }
+    @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
+    @keyframes pulse { 50% { opacity: .35; } }
+    .hintmark { animation: pulse 1s infinite; }
+
+    /* Телефон в альбомной ориентации: доска слева, остальное справа. */
+    @media (orientation: landscape) and (max-height: 560px) {
+      .view.board-view { display: grid; grid-template-columns: minmax(0, calc(var(--vh) - 58px)) 1fr; grid-template-rows: auto 1fr auto; }
+      .board-view .board-wrap { grid-column: 1; grid-row: 1 / 4; padding: 4px 4px 8px 10px; }
+      .board-view .info, .board-view .theory, .board-view .dots { grid-column: 2; }
+      .board-view .actions { grid-column: 2; grid-row: 3; flex-wrap: wrap; }
+      .board-view .actions .btn { flex: 1 1 40%; }
+      .board-view .side { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <span class="title">⚫ Гомоку</span>
+    <nav class="tabs"><button class="tab on" id="tab-game">Игра</button><button class="tab" id="tab-lessons">Уроки</button></nav>
+    <button class="icon-btn" id="btn-menu" title="Меню">☰</button>
+  </header>
+
+  <!-- Игра -->
+  <section class="view board-view" id="view-game">
+    <div class="side">
+      <div class="info"><div class="status" id="g-status"></div><div class="sub" id="g-sub"></div></div>
+    </div>
+    <div class="board-wrap" id="g-wrap"><svg id="g-board" viewBox="0 0 16 16"></svg></div>
+    <div class="actions">
+      <button class="btn" id="g-undo">↩️ Назад</button>
+      <button class="btn" id="g-hint">💡 Подсказка</button>
+      <button class="btn" id="g-settings">⚙️ Настройки</button>
+      <button class="btn btn-primary" id="g-new">✨ Новая</button>
+    </div>
+  </section>
+
+  <!-- Список уроков -->
+  <section class="view" id="view-lessons" hidden>
+    <div class="lessons" id="lessons"></div>
+  </section>
+
+  <!-- Урок -->
+  <section class="view board-view" id="view-lesson" hidden>
+    <div class="side">
+      <div class="theory" id="l-theory"></div>
+      <div class="dots" id="l-dots"></div>
+      <div class="info"><div class="status" id="l-status"></div><div class="sub" id="l-sub"></div></div>
+    </div>
+    <div class="board-wrap" id="l-wrap"><svg id="l-board" viewBox="0 0 16 16"></svg></div>
+    <div class="actions">
+      <button class="btn" id="l-back">⬅️ Уроки</button>
+      <button class="btn" id="l-retry">🔁 Заново</button>
+      <button class="btn" id="l-hint">💡 Подсказка</button>
+      <button class="btn btn-primary" id="l-next">Дальше ➡️</button>
+    </div>
+  </section>
+
+  <div class="overlay" id="settings" hidden>
+    <div class="modal">
+      <h2>Новая партия</h2>
+      <div class="field"><label>Соперник</label>
+        <div class="seg" id="s-opp"><button data-v="ai">🤖 Компьютер</button><button data-v="human">🧑 Вдвоём</button></div>
+      </div>
+      <div class="field" id="s-level-field"><label>Сила компьютера</label><div class="seg levels" id="s-level"></div><p id="s-level-about" style="margin:6px 0 0;font-size:13px"></p></div>
+      <div class="field" id="s-color-field"><label>Я играю</label>
+        <div class="seg" id="s-color"><button data-v="1"><span class="stone-ic b"></span>Чёрными</button><button data-v="2"><span class="stone-ic w"></span>Белыми</button></div>
+        <p style="margin:6px 0 0;font-size:13px">Чёрные ходят первыми.</p>
+      </div>
+      <div class="field"><label>Правила</label>
+        <div class="seg" id="s-preset"><button data-v="free">Свободные</button><button data-v="standard">Стандарт</button><button data-v="renju">Рэндзю</button></div>
+        <label class="check"><input type="checkbox" id="s-exact"><span>Ровно пять<small>Шесть и больше в ряд не выигрывают</small></span></label>
+        <label class="check"><input type="checkbox" id="s-f33"><span>Чёрным нельзя 3×3<small>Две открытые тройки одним ходом</small></span></label>
+        <label class="check"><input type="checkbox" id="s-f44"><span>Чёрным нельзя 4×4<small>Две четвёрки одним ходом</small></span></label>
+        <label class="check"><input type="checkbox" id="s-f6"><span>Чёрным нельзя длинный ряд<small>Шесть и больше подряд</small></span></label>
+      </div>
+      <div class="field"><label>Подсказки на доске</label>
+        <label class="check"><input type="checkbox" id="s-showban"><span>Показывать запретные точки ✕</span></label>
+        <label class="check"><input type="checkbox" id="s-nums"><span>Номера ходов</span></label>
+      </div>
+      <div class="row"><button class="btn" id="s-cancel">Отмена</button><button class="btn btn-primary" id="s-start">Играть!</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="menu" hidden>
+    <div class="modal">
+      <h2>Меню</h2>
+      <div class="menu-list">
+        <button class="btn" id="m-rules">📖 Правила</button>
+        <button class="btn" id="m-install" hidden>📲 Установить</button>
+        <a class="btn" href="../">♟️ Шахматы</a>
+        <a class="btn" href="../jamb/">🎲 Ямб</a>
+        <a class="btn" href="../house/">🏠 Дом</a>
+        <a class="btn" href="../pandas/">🐼 Найди панд</a>
+        <button class="btn btn-primary" id="m-close">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="rules" hidden>
+    <div class="modal">
+      <h2>Правила</h2>
+      <p><b>Гомоку</b> — японская игра «пять в ряд». На доске 15×15 игроки по очереди ставят камни, первыми — чёрные. Кто первым выстроит пять своих камней подряд по горизонтали, вертикали или диагонали, тот выиграл.</p>
+      <p><b>Свободные правила:</b> выигрывают пять и больше. <b>Стандарт:</b> только ровно пять.</p>
+      <p><b>Рэндзю:</b> чёрные начинают и поэтому сильнее, так что им запрещено ставить 3×3 (две открытые тройки), 4×4 (две четвёрки) и длинный ряд (шесть и больше). Если ход делает ровно пять — он разрешён, даже если это и запрет. Белым можно всё. Запрет — оружие белых: если чёрным нечем закрыть четвёрку, кроме запрещённого хода, они проигрывают.</p>
+      <p>Каждый запрет можно включить или выключить в настройках.</p>
+      <div class="row"><button class="btn btn-primary" id="r-close">Понятно</button></div>
+    </div>
+  </div>
+
+  <div id="confetti" aria-hidden="true"></div>
+
+  <script src="gomoku.js"></script>
+  <script src="ai.js"></script>
+  <script src="brain.js"></script>
+  <script src="puzzles.js"></script>
+  <script src="lessons.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const G = window.Gomoku, A = window.GomokuAI;
+    const $ = (id) => document.getElementById(id);
+    const NS = 'http://www.w3.org/2000/svg';
+    const { N, BLACK, WHITE, X, Y } = G;
+    const store = {
+      get(k, d) { try { const v = JSON.parse(localStorage.getItem('gomoku-' + k)); return v === null ? d : v; } catch (e) { return d; } },
+      set(k, v) { try { localStorage.setItem('gomoku-' + k, JSON.stringify(v)); } catch (e) { /* ничего */ } },
+    };
+    const COLOR_NAME = { 1: 'Чёрные', 2: 'Белые' };
+    const stoneIc = (c) => `<span class="stone-ic ${c === BLACK ? 'b' : 'w'}"></span>`;
+    const plural = (n, a, b, c) => (n % 10 === 1 && n % 100 !== 11 ? a : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? b : c);
+    const FORBID_NAME = { 33: '3×3 — две открытые тройки', 44: '4×4 — две четвёрки', 6: 'длинный ряд — шесть и больше' };
+
+    // ---------- «Мозг» в фоновом потоке (или на странице, если поток недоступен) ----------
+    let worker = null, seq = 0;
+    const waiting = new Map();
+    try {
+      worker = new Worker('worker.js');
+      worker.onmessage = (e) => { const w = waiting.get(e.data.id); if (w) { waiting.delete(e.data.id); w(e.data); } };
+      worker.onerror = () => { worker = null; };
+    } catch (e) { worker = null; }
+    function brain(cmd, data) {
+      if (worker) {
+        return new Promise((resolve) => {
+          const id = ++seq;
+          waiting.set(id, (m) => resolve(m.error ? null : m.result));
+          worker.postMessage({ id, cmd, data });
+        });
+      }
+      return new Promise((resolve) => setTimeout(() => {
+        try { resolve(window.GomokuBrain[cmd](data)); } catch (e) { resolve(null); }
+      }, 20));
+    }
+
+    // ---------- Доска (рисование) ----------
+    const STAR = [[3, 3], [11, 3], [7, 7], [3, 11], [11, 11]];
+    // У каждой доски свои id градиентов: иначе вторая доска берёт их у первой, а та может быть скрыта.
+    function drawBoardBase(svg) {
+      const p = svg.id + '-';
+      svg.dataset.p = p;
+      let s = `<defs>
+        <radialGradient id="${p}gb" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#6b6b6b"/><stop offset=".6" stop-color="#1c1c1c"/><stop offset="1" stop-color="#000"/></radialGradient>
+        <radialGradient id="${p}gw" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff"/><stop offset=".75" stop-color="#e9e6df"/><stop offset="1" stop-color="#bdb8ad"/></radialGradient>
+        <linearGradient id="${p}gwood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8bd7a"/><stop offset="1" stop-color="#d9a45b"/></linearGradient>
+      </defs><rect x="0" y="0" width="16" height="16" rx=".4" fill="url(#${p}gwood)"/>`;
+      s += '<g stroke="#6d4a22" stroke-width=".04">';
+      for (let k = 1; k <= N; k++) s += `<line x1="1" y1="${k}" x2="${N}" y2="${k}"/><line x1="${k}" y1="1" x2="${k}" y2="${N}"/>`;
+      s += '</g><g fill="#6d4a22">';
+      for (const [x, y] of STAR) s += `<circle cx="${x + 1}" cy="${y + 1}" r=".11"/>`;
+      s += '</g><g fill="#8a6235" font-size=".36" font-weight="800" text-anchor="middle" font-family="Nunito, sans-serif">';
+      for (let k = 0; k < N; k++) {
+        s += `<text x="${k + 1}" y="15.75">${'abcdefghijklmno'[k]}</text>`;
+        s += `<text x=".42" y="${k + 1.13}">${N - k}</text>`;
+      }
+      s += '</g><g class="layer-marks"></g><g class="layer-stones"></g><g class="layer-top"></g>';
+      svg.innerHTML = s;
+    }
+    // Рисует камни и метки. opts: { last, nums, forbidden:[], marks:[{i, kind}], line:[] }
+    function render(svg, b, moves, opts) {
+      const stones = svg.querySelector('.layer-stones'), top = svg.querySelector('.layer-top'), marks = svg.querySelector('.layer-marks');
+      let s = '';
+      const numOf = new Map();
+      if (opts.nums) moves.forEach((m, k) => numOf.set(m, k + 1));
+      for (let i = 0; i < G.SIZE; i++) {
+        const c = b[i];
+        if (!c) continue;
+        const x = X(i) + 1, y = Y(i) + 1;
+        s += `<circle cx="${x}" cy="${y}" r=".46" fill="url(#${svg.dataset.p}${c === BLACK ? 'gb' : 'gw'})" ${c === WHITE ? 'stroke="#9c968b" stroke-width=".03"' : ''}/>`;
+        if (numOf.has(i)) s += `<text x="${x}" y="${y + 0.14}" font-size=".38" font-weight="800" text-anchor="middle" fill="${c === BLACK ? '#fff' : '#222'}" font-family="Nunito, sans-serif">${numOf.get(i)}</text>`;
+      }
+      stones.innerHTML = s;
+      let t = '';
+      if (opts.last >= 0 && !opts.nums) {
+        const c = b[opts.last];
+        t += `<circle cx="${X(opts.last) + 1}" cy="${Y(opts.last) + 1}" r=".14" fill="${c === BLACK ? '#ff6b4a' : '#e0452b'}"/>`;
+      }
+      if (opts.line && opts.line.length) {
+        const a = opts.line[0], z = opts.line[opts.line.length - 1];
+        t += `<line x1="${X(a) + 1}" y1="${Y(a) + 1}" x2="${X(z) + 1}" y2="${Y(z) + 1}" stroke="#ff8a3d" stroke-width=".16" stroke-linecap="round" opacity=".85"/>`;
+      }
+      for (const m of opts.marks || []) {
+        const x = X(m.i) + 1, y = Y(m.i) + 1;
+        if (m.kind === 'hint') t += `<circle class="hintmark" cx="${x}" cy="${y}" r=".42" fill="none" stroke="#2e9d5b" stroke-width=".12"/>`;
+        if (m.kind === 'bad') t += `<circle cx="${x}" cy="${y}" r=".42" fill="none" stroke="#d64545" stroke-width=".12"/>`;
+        if (m.kind === 'threat') t += `<circle class="hintmark" cx="${x}" cy="${y}" r=".4" fill="rgba(214,69,69,.35)" stroke="#d64545" stroke-width=".08"/>`;
+        if (m.kind === 'ok') t += `<circle cx="${x}" cy="${y}" r=".5" fill="none" stroke="#2e9d5b" stroke-width=".12"/>`;
+      }
+      top.innerHTML = t;
+      let f = '';
+      for (const i of opts.forbidden || []) {
+        const x = X(i) + 1, y = Y(i) + 1;
+        f += `<path d="M${x - 0.2} ${y - 0.2} L${x + 0.2} ${y + 0.2} M${x + 0.2} ${y - 0.2} L${x - 0.2} ${y + 0.2}" stroke="#d64545" stroke-width=".09" stroke-linecap="round"/>`;
+      }
+      marks.innerHTML = f;
+    }
+    // Клетка под пальцем.
+    function cellAt(svg, e) {
+      const p = svg.createSVGPoint();
+      p.x = e.clientX; p.y = e.clientY;
+      const q = p.matrixTransform(svg.getScreenCTM().inverse());
+      const x = Math.round(q.x - 1), y = Math.round(q.y - 1);
+      if (x < 0 || y < 0 || x >= N || y >= N || Math.hypot(q.x - 1 - x, q.y - 1 - y) > 0.55) return -1;
+      return G.idx(x, y);
+    }
+    // Доска — квадрат, сколько поместится.
+    function fit() {
+      for (const [wrap, svg] of [[$('g-wrap'), $('g-board')], [$('l-wrap'), $('l-board')]]) {
+        if (!wrap.offsetParent) continue;
+        const r = wrap.getBoundingClientRect();
+        const side = Math.max(160, Math.floor(Math.min(r.width, r.height) - 12));
+        svg.setAttribute('width', side);
+        svg.setAttribute('height', side);
+      }
+    }
+    window.addEventListener('resize', () => requestAnimationFrame(fit));
+    // Пять в ряд через клетку — для подсветки.
+    function winLine(b, i, c) {
+      for (const [dx, dy] of G.DIRS) {
+        const line = [i];
+        for (const s of [1, -1]) {
+          for (let k = 1; k < N; k++) {
+            const x = X(i) + s * k * dx, y = Y(i) + s * k * dy;
+            if (!G.inside(x, y) || b[G.idx(x, y)] !== c) break;
+            if (s === 1) line.push(G.idx(x, y)); else line.unshift(G.idx(x, y));
+          }
+        }
+        if (line.length >= 5) return line;
+      }
+      return [];
+    }
+
+    function toast(t, ms = 2400) {
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.textContent = t;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), ms);
+    }
+    function confetti() {
+      const box = $('confetti');
+      const bits = ['🎉', '⭐', '✨', '⚫', '⚪', '🏆'];
+      for (let k = 0; k < 34; k++) {
+        const s = document.createElement('span');
+        s.textContent = bits[k % bits.length];
+        s.style.left = Math.random() * 100 + 'vw';
+        s.style.animationDuration = 2.2 + Math.random() * 2 + 's';
+        s.style.animationDelay = Math.random() * 0.6 + 's';
+        box.appendChild(s);
+      }
+      setTimeout(() => { box.innerHTML = ''; }, 5000);
+    }
+    // Звук: стук камня.
+    let audio = null;
+    function clack(high) {
+      try {
+        audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+        if (audio.state === 'suspended') audio.resume();
+        const t0 = audio.currentTime, o = audio.createOscillator(), g = audio.createGain();
+        o.type = 'triangle'; o.frequency.value = high ? 1250 : 950;
+        g.gain.setValueAtTime(0.14, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.09);
+        o.connect(g).connect(audio.destination); o.start(t0); o.stop(t0 + 0.1);
+      } catch (e) { /* без звука */ }
+    }
+
+    // ================= Игра =================
+    const DEFAULT = { opp: 'ai', level: 2, color: BLACK, preset: 'renju', rules: G.PRESETS.renju, showban: true, nums: false };
+    let cfg = Object.assign({}, DEFAULT, store.get('cfg', {}));
+    let game = store.get('game', null); // { cfg, moves: [i…], over: null | { winner, line } }
+    let B = null;          // доска текущей партии
+    let thinking = false, aiTok = 0, hint = -1, bans = [];
+
+    function rebuild() {
+      B = new G.Board(game.cfg.rules);
+      game.moves.forEach((m, k) => B.play(m, k % 2 === 0 ? BLACK : WHITE));
+    }
+    function newGame() {
+      game = { cfg: JSON.parse(JSON.stringify(cfg)), moves: [], over: null };
+      store.set('game', game);
+      rebuild();
+      afterMove();
+    }
+    const human = (c) => game.cfg.opp === 'human' || c === game.cfg.color;
+    async function refreshBans() {
+      bans = [];
+      if (game.cfg.showban && G.hasForbid(B.R) && B.turn() === BLACK && human(BLACK) && !game.over) {
+        const tok = aiTok;
+        const list = await brain('forbidden', { rules: game.cfg.rules, moves: B.moves.map((m, k) => [m, k % 2 ? WHITE : BLACK]) });
+        if (tok === aiTok && list) bans = list;
+      }
+      draw();
+    }
+    function draw() {
+      render($('g-board'), B.b, B.moves, {
+        last: B.moves.length ? B.moves[B.moves.length - 1] : -1, nums: game.cfg.nums, forbidden: bans,
+        line: game.over && game.over.line, marks: hint >= 0 ? [{ i: hint, kind: 'hint' }] : [],
+      });
+      const c = B.turn();
+      const lvl = A.LEVELS[game.cfg.level - 1];
+      if (game.over) {
+        const w = game.over.winner;
+        $('g-status').innerHTML = !w ? 'Ничья — доска заполнена' :
+          game.cfg.opp === 'human' ? `${stoneIc(w)}${COLOR_NAME[w]} выиграли! 🎉` :
+          w === game.cfg.color ? 'Ты выиграл(а)! 🎉' : `${lvl.emoji} ${lvl.name} выиграл. Ещё разок?`;
+      } else if (thinking) {
+        $('g-status').innerHTML = `${lvl.emoji} ${lvl.name} думает<span class="think">…</span>`;
+      } else {
+        $('g-status').innerHTML = game.cfg.opp === 'human' ? `Ход: ${stoneIc(c)}${COLOR_NAME[c].toLowerCase()}` : `Твой ход ${stoneIc(c)}`;
+      }
+      const R = game.cfg.rules;
+      const rulesName = game.cfg.preset === 'free' ? 'свободные правила' : game.cfg.preset === 'standard' ? 'стандарт' : game.cfg.preset === 'renju' ? 'рэндзю' : 'свои правила';
+      $('g-sub').textContent = (game.cfg.opp === 'ai' ? `${lvl.emoji} ${lvl.name} · ` : '🧑 вдвоём · ') + rulesName +
+        (G.hasForbid(R) && !game.over && c === BLACK && bans.length ? ' · ✕ — чёрным нельзя' : '');
+      $('g-undo').disabled = !B.moves.length || thinking;
+      $('g-hint').disabled = !!game.over || thinking;
+    }
+    function finishIfWon(m, c) {
+      if (G.isWinAt(B.b, m, c, B.R)) {
+        B.play(m, c);
+        game.moves.push(m);
+        game.over = { winner: c, line: winLine(B.b, m, c) };
+        if (game.cfg.opp === 'human' || c === game.cfg.color) confetti();
+        return true;
+      }
+      return false;
+    }
+    function play(m) {
+      const c = B.turn();
+      hint = -1;
+      if (!finishIfWon(m, c)) {
+        B.play(m, c);
+        game.moves.push(m);
+        if (B.moves.length >= G.SIZE) game.over = { winner: 0, line: [] };
+      }
+      clack(c === WHITE);
+      store.set('game', game);
+      afterMove();
+    }
+    function afterMove() {
+      bans = [];
+      draw();
+      if (!game.over && !human(B.turn())) aiMove();
+      else refreshBans();
+    }
+    async function aiMove() {
+      thinking = true;
+      const tok = ++aiTok;
+      draw();
+      const t0 = Date.now();
+      const m = await brain('ai', { rules: game.cfg.rules, moves: B.moves.map((x, k) => [x, k % 2 ? WHITE : BLACK]), color: B.turn(), level: game.cfg.level });
+      await new Promise((r) => setTimeout(r, Math.max(0, 450 - (Date.now() - t0))));
+      if (tok !== aiTok) return;
+      thinking = false;
+      if (m === null || m < 0 || B.b[m]) { draw(); return; }
+      play(m);
+    }
+    $('g-board').addEventListener('click', (e) => {
+      if (!game || game.over || thinking) return;
+      const c = B.turn();
+      if (!human(c)) return;
+      const m = cellAt($('g-board'), e);
+      if (m < 0 || B.b[m]) return;
+      if (c === BLACK && !G.isWinAt(B.b, m, c, B.R)) {
+        const k = G.forbiddenKind(B.b, m, B.R);
+        if (k) { toast(`Чёрным сюда нельзя: ${FORBID_NAME[k]}`); bans = Array.from(new Set(bans.concat([m]))); draw(); return; }
+      }
+      play(m);
+    });
+    $('g-undo').onclick = () => {
+      if (!B.moves.length || thinking) return;
+      aiTok++;
+      game.over = null;
+      hint = -1;
+      do { game.moves.pop(); } while (game.moves.length && game.cfg.opp === 'ai' && !human(game.moves.length % 2 === 0 ? BLACK : WHITE));
+      store.set('game', game);
+      rebuild();
+      afterMove();
+    };
+    $('g-hint').onclick = async () => {
+      if (game.over || thinking) return;
+      $('g-sub').textContent = '💡 Думаю…';
+      const tok = aiTok;
+      const m = await brain('hint', { rules: game.cfg.rules, moves: B.moves.map((x, k) => [x, k % 2 ? WHITE : BLACK]), color: B.turn() });
+      if (tok !== aiTok || m === null || m < 0) { draw(); return; }
+      hint = m;
+      draw();
+    };
+    $('g-new').onclick = () => { aiTok++; thinking = false; hint = -1; newGame(); };
+
+    // ---------- Настройки ----------
+    function openSettings() {
+      $('s-level').innerHTML = A.LEVELS.map((l) => `<button data-v="${l.id}"><span>${l.emoji}</span>${l.name}</button>`).join('');
+      const sync = () => {
+        const seg = (id, v) => document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle('on', b.dataset.v === String(v)));
+        seg('s-opp', cfg.opp); seg('s-level', cfg.level); seg('s-color', cfg.color); seg('s-preset', cfg.preset);
+        $('s-level-field').hidden = $('s-color-field').hidden = cfg.opp !== 'ai';
+        $('s-level-about').textContent = `${A.LEVELS[cfg.level - 1].emoji} ${A.LEVELS[cfg.level - 1].about}`;
+        for (const k of ['exact', 'f33', 'f44', 'f6']) $('s-' + k).checked = !!cfg.rules[k];
+        $('s-showban').checked = cfg.showban;
+        $('s-nums').checked = cfg.nums;
+      };
+      const bind = (id, fn) => document.querySelectorAll(`#${id} button`).forEach((b) => { b.onclick = () => { fn(b.dataset.v); sync(); }; });
+      bind('s-opp', (v) => { cfg.opp = v; });
+      bind('s-level', (v) => { cfg.level = +v; });
+      bind('s-color', (v) => { cfg.color = +v; });
+      bind('s-preset', (v) => { cfg.preset = v; cfg.rules = Object.assign({}, G.PRESETS[v]); });
+      for (const k of ['exact', 'f33', 'f44', 'f6']) {
+        $('s-' + k).onchange = (e) => {
+          cfg.rules = Object.assign({}, cfg.rules, { [k]: e.target.checked });
+          const same = Object.keys(G.PRESETS).find((p) => ['exact', 'f33', 'f44', 'f6'].every((r) => !!G.PRESETS[p][r] === !!cfg.rules[r]));
+          cfg.preset = same || 'custom';
+          sync();
+        };
+      }
+      $('s-showban').onchange = (e) => { cfg.showban = e.target.checked; };
+      $('s-nums').onchange = (e) => { cfg.nums = e.target.checked; };
+      sync();
+      $('settings').hidden = false;
+    }
+    $('g-settings').onclick = openSettings;
+    $('s-cancel').onclick = () => { cfg = Object.assign({}, DEFAULT, store.get('cfg', {})); $('settings').hidden = true; };
+    $('s-start').onclick = () => {
+      store.set('cfg', cfg);
+      $('settings').hidden = true;
+      aiTok++; thinking = false; hint = -1;
+      newGame();
+    };
+
+    // ================= Уроки =================
+    const LESSONS = window.GomokuLessons, PUZ = window.GomokuPuzzles || {};
+    // Задачи урока: свои или из сгенерированного набора.
+    function tasksOf(lesson) {
+      if (lesson.tasks) return lesson.tasks;
+      const sets = Array.isArray(lesson.from) ? lesson.from : [lesson.from];
+      const all = [];
+      const per = Math.ceil(lesson.count / sets.length);
+      for (const s of sets) all.push(...(PUZ[s] || []).slice(0, per));
+      return all.slice(0, lesson.count);
+    }
+    let progress = store.get('progress', {}); // { lessonId: [true, …] }
+    const lessonDone = (l) => { const p = progress[l.id] || []; const n = tasksOf(l).length; return n > 0 && p.filter(Boolean).length >= n; };
+    const unlocked = (k) => k === 0 || lessonDone(LESSONS[k - 1]) || store.get('unlockAll', false);
+    function currentRank() {
+      let r = null;
+      for (const l of LESSONS) { if (lessonDone(l)) r = l.rank; else break; }
+      return r;
+    }
+    function renderLessons() {
+      const rank = currentRank();
+      let h = `<div class="rank-card"><span class="big">🎓</span><div><b>${rank || 'Пока без разряда'}</b><div style="color:var(--muted);font-weight:700;font-size:13px">${rank ? 'Твой разряд. Следующий урок ждёт!' : 'Пройди первый урок — получишь 15 кю.'}</div></div></div>`;
+      LESSONS.forEach((l, k) => {
+        const n = tasksOf(l).length, p = (progress[l.id] || []).filter(Boolean).length;
+        const done = lessonDone(l), open = unlocked(k);
+        h += `<button class="lesson${done ? ' done' : ''}${open ? '' : ' locked'}" data-k="${k}"><span class="rk">${l.rank}</span>` +
+          `<span class="tt">${l.title}<small>${done ? 'Пройден' : open ? `Задач: ${p} из ${n}` : 'Сначала пройди предыдущий'}</small></span><span class="st">${done ? '✅' : open ? '▶️' : '🔒'}</span></button>`;
+      });
+      $('lessons').innerHTML = h;
+    }
+    $('lessons').onclick = (e) => {
+      const b = e.target.closest('.lesson');
+      if (!b) return;
+      const k = +b.dataset.k;
+      if (!unlocked(k)) { toast('Сначала пройди предыдущий урок 🙂'); return; }
+      openLesson(k);
+    };
+
+    // Состояние урока.
+    let L = null; // { k, lesson, tasks, t, B, color, remaining, answers, solved, busy, wrong, marks, tok }
+    function openLesson(k, t) {
+      const lesson = LESSONS[k], tasks = tasksOf(lesson);
+      const p = progress[lesson.id] || [];
+      if (t === undefined) { t = p.findIndex((x) => !x); if (t < 0) t = 0; }
+      L = { k, lesson, tasks, t };
+      showView('lesson');
+      $('l-theory').innerHTML = `<h3>${lesson.rank} · ${lesson.title}</h3>${lesson.text}`;
+      $('l-theory').classList.remove('small');
+      loadTask();
+    }
+    $('l-theory').onclick = () => $('l-theory').classList.toggle('small');
+    const lessonMoves = () => L.B.moves.map((m) => [m, L.B.b[m]]);
+    function loadTask() {
+      const task = L.tasks[L.t];
+      const tok = (L.tok || 0) + 1;
+      Object.assign(L, { task, tok, B: G.boardFrom(task.rules, G.parseList(task.b), G.parseList(task.w)), color: task.turn === 'b' ? BLACK : WHITE,
+        remaining: task.n, answers: null, solved: false, busy: false, wrong: 0, marks: [], line: [], last: -1 });
+      const p = progress[L.lesson.id] || [];
+      $('l-dots').innerHTML = L.tasks.map((_, i) => `<span class="${p[i] ? 'on' : ''}${i === L.t ? ' cur' : ''}"></span>`).join('');
+      const who = `${stoneIc(L.color)}${COLOR_NAME[L.color]}`;
+      const rules = task.rules === 'renju' ? 'рэндзю' : 'свободные правила';
+      if (task.type === 'win') {
+        $('l-status').innerHTML = `${who}: выиграйте за ${task.n} ${plural(task.n, 'ход', 'хода', 'ходов')}`;
+        $('l-sub').textContent = `${task.threes ? 'Можно тройками и четвёрками' : 'Каждый ход — четвёрка'} · ${rules}`;
+        if (task.n === 1) $('l-sub').textContent = `Поставь пятый камень · ${rules}`;
+      } else if (task.type === 'defend') {
+        $('l-status').innerHTML = `${who}: защититесь!`;
+        $('l-sub').textContent = `Соперник грозит выиграть — найди ход, который его остановит · ${rules}`;
+      } else {
+        $('l-status').innerHTML = 'Куда чёрным ставить нельзя?';
+        $('l-sub').textContent = 'Нажми на запрещённую клетку · рэндзю';
+      }
+      $('l-next').textContent = L.t + 1 < L.tasks.length ? 'Дальше ➡️' : 'Готово ✅';
+      $('l-next').disabled = !p[L.t];
+      drawLesson();
+      prepare(tok);
+    }
+    // Заранее спрашиваем у «мозга» верные ответы — тогда проверка мгновенная.
+    async function prepare(tok) {
+      const task = L.task;
+      L.busy = true;
+      // Если думать долго — честно скажем.
+      setTimeout(() => { if (L && tok === L.tok && L.busy && !L.solved) { L.slow = true; $('l-sub').innerHTML = 'Соперник думает<span class="think">…</span>'; } }, 700);
+      let ans = null;
+      // Для сгенерированных задач верные первые ходы уже известны (их сверяют тесты) — проверка мгновенная.
+      if (task.answers && L.remaining === task.n) ans = G.parseList(task.answers.join(' '));
+      else if (task.type === 'win') ans = await brain('winning', { rules: task.rules, moves: lessonMoves(), color: L.color, n: L.remaining, threes: task.threes });
+      else if (task.type === 'defend') ans = await brain('saves', { rules: task.rules, moves: lessonMoves(), color: L.color, n: task.n });
+      else {
+        ans = [];
+        for (let i = 0; i < G.SIZE; i++) if (!L.B.b[i] && G.isForbidden(L.B.b, i, L.B.R)) ans.push(i);
+      }
+      if (!L || tok !== L.tok) return;
+      L.answers = ans || [];
+      L.busy = false;
+      if (L.slow) { L.slow = false; $('l-sub').textContent = 'Готово — твой ход!'; }
+    }
+    function drawLesson() {
+      render($('l-board'), L.B.b, L.B.moves, { last: L.last, marks: L.marks, line: L.line });
+      fit();
+    }
+    function solved(text) {
+      L.solved = true;
+      const p = progress[L.lesson.id] || [];
+      const firstTime = !lessonDone(L.lesson);
+      p[L.t] = true;
+      progress[L.lesson.id] = p;
+      store.set('progress', progress);
+      $('l-status').innerHTML = `<span class="ok">✅ ${text}</span>`;
+      $('l-next').disabled = false;
+      $('l-dots').querySelectorAll('span')[L.t].classList.add('on');
+      if (firstTime && lessonDone(L.lesson)) {
+        confetti();
+        $('l-sub').textContent = `🎓 Урок пройден! Твой разряд: ${currentRank()}`;
+      } else {
+        $('l-sub').textContent = L.t + 1 < L.tasks.length ? 'Жми «Дальше»' : 'Все задачи урока решены!';
+      }
+      clack(true);
+    }
+    $('l-board').addEventListener('click', async (e) => {
+      if (!L || L.solved || L.busy) return;
+      const m = cellAt($('l-board'), e);
+      if (m < 0 || L.B.b[m]) return;
+      const task = L.task, c = L.color, o = G.other(c);
+      if (task.type === 'forbidden') {
+        const k = G.forbiddenKind(L.B.b, m, L.B.R);
+        if (k) { L.marks = [{ i: m, kind: 'ok' }]; drawLesson(); solved(`Верно! Здесь ${FORBID_NAME[k]}.`); }
+        else { L.wrong++; L.marks = [{ i: m, kind: 'bad' }]; drawLesson(); $('l-sub').innerHTML = '<span class="no">Сюда чёрным можно. Ищи ход, который даёт две тройки, две четвёрки или шесть в ряд.</span>'; }
+        return;
+      }
+      if (c === BLACK && !G.isWinAt(L.B.b, m, c, L.B.R) && G.isForbidden(L.B.b, m, L.B.R)) {
+        toast(`Чёрным сюда нельзя: ${FORBID_NAME[G.forbiddenKind(L.B.b, m, L.B.R)]}`);
+        return;
+      }
+      if (L.answers && L.answers.includes(m)) {
+        const win = G.isWinAt(L.B.b, m, c, L.B.R);
+        L.B.play(m, c);
+        L.last = m;
+        L.marks = [];
+        clack(c === WHITE);
+        if (win) { L.line = winLine(L.B.b, m, c); drawLesson(); solved('Пять в ряд — победа!'); return; }
+        if (task.type === 'defend') { drawLesson(); solved('Верно, угроза остановлена!'); return; }
+        // Соперник защищается, потом снова твой ход.
+        L.remaining--;
+        drawLesson();
+        L.busy = true;
+        $('l-sub').textContent = 'Соперник защищается…';
+        const tok = L.tok;
+        const d = await brain('defense', { rules: task.rules, moves: lessonMoves(), color: c, last: m });
+        await new Promise((r) => setTimeout(r, 450));
+        if (!L || tok !== L.tok) return;
+        let noDefense = false;
+        if (d !== null && d >= 0 && !L.B.b[d]) {
+          L.B.play(d, o);
+          L.last = d;
+          clack(o === WHITE);
+        } else if (d === -1) {
+          noDefense = true;
+        }
+        drawLesson();
+        $('l-sub').textContent = noDefense
+          ? 'Чёрным нечем закрыться — только запрещённым ходом! Ставь пятый.'
+          : `Хорошо! Осталось ${L.remaining} ${plural(L.remaining, 'ход', 'хода', 'ходов')}`;
+        prepare(tok);
+        return;
+      }
+      if (!L.answers) return;
+      // Неверно: показываем, чем ответит соперник, и возвращаем ход.
+      L.wrong++;
+      L.busy = true;
+      L.B.play(m, c);
+      L.marks = [{ i: m, kind: 'bad' }];
+      drawLesson();
+      const tok = L.tok;
+      $('l-sub').innerHTML = '<span class="no">Не выходит…</span>';
+      let reply = null;
+      if (task.type === 'defend') {
+        const w = await brain('winning', { rules: task.rules, moves: lessonMoves(), color: o, n: task.n, threes: true, limit: 60000 });
+        reply = w && w.length ? w[0] : null;
+      }
+      if (!L || tok !== L.tok) return;
+      if (reply !== null) L.marks.push({ i: reply, kind: 'threat' });
+      drawLesson();
+      const why = task.type === 'defend'
+        ? 'После этого соперник всё равно выигрывает — смотри красную точку.'
+        : (L.task.threes ? 'Это не та угроза: соперник успеет защититься.' : 'Нужна четвёрка, после которой выигрыш продолжается.');
+      $('l-sub').innerHTML = `<span class="no">${why}</span>${L.wrong >= 2 ? ' Можно взять 💡 подсказку.' : ''}`;
+      setTimeout(() => {
+        if (!L || tok !== L.tok) return;
+        L.B.undo();
+        L.marks = [];
+        L.busy = false;
+        drawLesson();
+      }, 1700);
+    });
+    $('l-hint').onclick = () => {
+      if (!L || L.solved) return;
+      if (!L.answers || !L.answers.length) { toast('Подсказка ещё готовится…'); return; }
+      L.marks = [{ i: L.answers[0], kind: 'hint' }];
+      drawLesson();
+    };
+    $('l-retry').onclick = () => { if (L) loadTask(); };
+    $('l-next').onclick = () => {
+      if (!L) return;
+      if (L.t + 1 < L.tasks.length) { L.t++; loadTask(); return; }
+      // Урок закончен: следующий урок или список.
+      if (L.k + 1 < LESSONS.length && lessonDone(L.lesson)) openLesson(L.k + 1);
+      else showView('lessons');
+    };
+    $('l-back').onclick = () => showView('lessons');
+
+    // ================= Экраны и меню =================
+    function showView(v) {
+      $('view-game').hidden = v !== 'game';
+      $('view-lessons').hidden = v !== 'lessons';
+      $('view-lesson').hidden = v !== 'lesson';
+      $('tab-game').classList.toggle('on', v === 'game');
+      $('tab-lessons').classList.toggle('on', v !== 'game');
+      if (v !== 'lesson' && L) L.tok++;
+      if (v === 'lessons') renderLessons();
+      store.set('view', v === 'lesson' ? 'lessons' : v);
+      requestAnimationFrame(fit);
+    }
+    $('tab-game').onclick = () => showView('game');
+    $('tab-lessons').onclick = () => showView('lessons');
+    $('btn-menu').onclick = () => { $('menu').hidden = false; };
+    $('m-close').onclick = () => { $('menu').hidden = true; };
+    $('m-rules').onclick = () => { $('menu').hidden = true; $('rules').hidden = false; };
+    $('r-close').onclick = () => { $('rules').hidden = true; };
+    for (const id of ['menu', 'rules', 'settings']) {
+      $(id).addEventListener('click', (e) => { if (e.target === $(id)) $(id).hidden = true; });
+    }
+
+    // Установка как приложение.
+    let installPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; $('m-install').hidden = false; });
+    $('m-install').onclick = async () => {
+      if (!installPrompt) return;
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      $('m-install').hidden = true;
+    };
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна */ });
+    }
+
+    // ---------- Запуск ----------
+    drawBoardBase($('g-board'));
+    drawBoardBase($('l-board'));
+    if (!game || !game.cfg || !Array.isArray(game.moves)) newGame();
+    else { rebuild(); afterMove(); }
+    showView(store.get('view', 'game'));
+  })();
+  </script>
+</body>
+</html>
