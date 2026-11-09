@@ -68,6 +68,9 @@
     .pb.shake { animation: shake .5s; }
     .pb.wash { animation: wash .5s ease-in-out infinite; }
     @keyframes wash { 25% { transform: rotate(-7deg) translateY(-3px); } 75% { transform: rotate(7deg) translateY(-3px); } }
+    #fridge .door { transition: transform .45s ease-in-out, filter .45s; transform-box: fill-box; transform-origin: 100% 50%; }
+    #fridge.open .door { transform: scaleX(.14); filter: brightness(.85); }
+    .fridge-pick { animation: glow 0.6s ease-in-out 3; }
     .tvrun { animation: tvrun 2.2s linear infinite; }
     .tvrun.late { animation-delay: -.35s; }
     @keyframes tvrun { from { transform: translateX(-46px); } to { transform: translateX(46px); } }
@@ -206,6 +209,7 @@
         <li>⚽ <b>Играть</b> — нажимай в разные места дома, и питомец побежит за игрушкой.</li>
         <li>🙈 <b>Прятки</b> — питомец спрячется, а ты ищи: нажимай на мебель. Иногда он прячется и сам!</li>
         <li>💬 Над питомцем появляется облачко — это просьба. Выполни её и получи ⭐.</li>
+        <li>🧊 Нажми на холодильник — питомец сам выберет, что съесть, и положит в тарелку.</li>
         <li>🛁 Нажми на ванну — питомец пойдёт купаться.</li>
         <li>🛋️ Нажми на диван — питомец сядет и займётся чем-нибудь интересным: посмотрит мультик, почитает, споёт, а иногда к нему придут в гости.</li>
         <li>🛏️ Устал — нажми на кровать, и питомец ляжет спать. Если совсем устанет, уснёт сам.</li>
@@ -253,6 +257,7 @@
     const F1 = H.FLOOR_Y[1], F2 = H.FLOOR_Y[2];
     const BOWL_X = 622;
     const rnd = (a, b) => a + Math.random() * (b - a);
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // ---------- Состояние ----------
@@ -340,11 +345,18 @@
         <rect x="474" y="${F1 - 88}" width="132" height="10" rx="5" fill="#ffccbc"/>
         ${emo(510, F1 - 92, 26, '🍎')}${emo(570, F1 - 92, 26, '🫖')}</g>`;
       s += `<g id="bowl"><path d="M${BOWL_X - 26} ${F1 - 16} h52 l-6 16 h-40 z" fill="#42a5f5"/><ellipse cx="${BOWL_X}" cy="${F1 - 16}" rx="26" ry="5" fill="#1e88e5"/></g>`;
-      s += `<g data-f="fridge">
-        <rect x="645" y="${F1 - 178}" width="72" height="178" rx="12" fill="#e3f2fd" stroke="#90a4ae" stroke-width="3"/>
-        <line x1="647" y1="${F1 - 118}" x2="715" y2="${F1 - 118}" stroke="#90a4ae" stroke-width="3"/>
-        <rect x="653" y="${F1 - 160}" width="6" height="30" rx="3" fill="#90a4ae"/><rect x="653" y="${F1 - 104}" width="6" height="40" rx="3" fill="#90a4ae"/>
-        <circle cx="690" cy="${F1 - 150}" r="6" fill="#ff8a65"/><circle cx="700" cy="${F1 - 134}" r="5" fill="#81c784"/></g>`;
+      // Холодильник: внутри полки с едой (видно, когда дверцы открыты); дверцы на петлях справа.
+      s += `<g data-f="fridge" id="fridge">
+        <rect x="645" y="${F1 - 178}" width="72" height="178" rx="12" fill="#cfe8f7" stroke="#90a4ae" stroke-width="3"/>
+        <rect x="650" y="${F1 - 173}" width="62" height="168" rx="8" fill="#f4fbff"/>
+        <g stroke="#b3d4e6" stroke-width="3"><line x1="650" y1="${F1 - 118}" x2="712" y2="${F1 - 118}"/><line x1="650" y1="${F1 - 62}" x2="712" y2="${F1 - 62}"/></g>
+        <circle cx="681" cy="${F1 - 166}" r="4" fill="#fff59d"/>
+        <g id="fridge-food"></g>
+        <g class="door"><rect x="645" y="${F1 - 178}" width="72" height="60" rx="10" fill="#e3f2fd" stroke="#90a4ae" stroke-width="3"/>
+          <rect x="653" y="${F1 - 160}" width="6" height="30" rx="3" fill="#90a4ae"/>
+          <circle cx="690" cy="${F1 - 150}" r="6" fill="#ff8a65"/><circle cx="700" cy="${F1 - 134}" r="5" fill="#81c784"/></g>
+        <g class="door"><rect x="645" y="${F1 - 118}" width="72" height="118" rx="10" fill="#e3f2fd" stroke="#90a4ae" stroke-width="3"/>
+          <rect x="653" y="${F1 - 104}" width="6" height="40" rx="3" fill="#90a4ae"/></g></g>`;
       // Спальня: кровать, шкаф.
       s += `<g data-f="bed">
         <rect x="46" y="${F2 - 116}" width="18" height="116" rx="8" fill="#8d6e63"/>
@@ -528,7 +540,7 @@
     const REQ_ICON = () => ({ feed: P().foods[0][0], clean: '🧽', play: P().toy, sleep: '😴' });
     function refreshBubble() {
       if (Date.now() < sayUntil) return;
-      showBubble(S.req && !hidden && !sleeping ? REQ_ICON()[S.req] : '');
+      showBubble(S.req && !hidden && !sleeping && !busy ? REQ_ICON()[S.req] : ''); // занят — просьбу не показываем
     }
 
     // ---------- Звук ----------
@@ -691,6 +703,11 @@
       $('food-layer').innerHTML = emo(BOWL_X, F1 - 18, 30, food, ' id="food"');
       status(`${S.pet.name} бежит к миске…`);
       if (!(await walkTo(BOWL_X - 44, 1))) { $('food-layer').innerHTML = ''; busy = false; renderButtons(); return; }
+      await eatAtBowl(name);
+    }
+
+    // Питомец стоит у миски, еда уже в ней: съедает, наедается, засчитывается просьба «хочу есть».
+    async function eatAtBowl(name) {
       anim('eat');
       status(`${S.pet.name} ест ${name}. Ням-ням!`);
       for (let k = 0; k < 4; k++) {
@@ -709,6 +726,97 @@
       else status(`${S.pet.name} ${g('наелся', 'наелась')}! 😋`);
       renderMeters(); renderButtons(); save();
       nextWanderAt = Date.now() + 2500;
+    }
+
+    // ---------- Холодильник: питомец сам выбирает, что съесть ----------
+    const OTHER_DISHES = ['🍰', '🥗', '🍕', '🥞', '🍌', '🍇', '🧃', '🍝', '🥐'];
+    const FRIDGE_SLOTS = [[664, F1 - 126], [698, F1 - 126], [664, F1 - 70], [698, F1 - 70], [664, F1 - 14], [698, F1 - 14]];
+    let fridgeTok = 0;
+    function closeFridge() {
+      $('fridge').classList.remove('open');
+      setTimeout(() => { if (!$('fridge').classList.contains('open')) $('fridge-food').innerHTML = ''; }, 500);
+    }
+    async function fromFridge() {
+      if (busy || hidden || sleeping) return;
+      const n = S.pet.name;
+      if (S.food >= 90 && S.req !== 'feed') {
+        stopWalking();
+        anim('shake');
+        say('🙅');
+        status(`${n}: «Спасибо, я не хочу!»`);
+        return;
+      }
+      const tok = ++fridgeTok;
+      const alive = () => tok === fridgeTok;
+      $('tray').hidden = true;
+      mode = null;
+      busy = true;
+      renderButtons();
+      status(`${n} идёт к холодильнику… 🧊`);
+      if (!(await walkTo(598, 1)) || !alive()) { busy = false; renderButtons(); return; }
+      // На полках: три любимых блюда и три других — вперемешку.
+      const own = P().foods.map(([e, name]) => ({ e, name, own: true }));
+      const others = OTHER_DISHES.slice().sort(() => Math.random() - 0.5).slice(0, 3).map((e) => ({ e, own: false }));
+      const dishes = own.concat(others).sort(() => Math.random() - 0.5);
+      $('fridge-food').innerHTML = dishes.map((d, k) => emo(FRIDGE_SLOTS[k][0], FRIDGE_SLOTS[k][1], 24, d.e, ` id="fd${k}"`)).join('');
+      $('fridge').classList.add('open');
+      sound('ask');
+      status(`${n} выбирает… 🤔`, 8000);
+      say('🤔', 1000);
+      await sleep(1000);
+      if (!alive()) return;
+      // Разглядывает пару блюд и выбирает одно из любимых.
+      const k = dishes.indexOf(pick(own)); // выбираем один раз
+      for (const j of [Math.floor(Math.random() * 6), Math.floor(Math.random() * 6)]) {
+        say(dishes[j].e, 600);
+        await sleep(600);
+        if (!alive()) return;
+      }
+      const dish = dishes[k];
+      say('😋', 900);
+      status(`${n} ${g('выбрал', 'выбрала')} ${dish.name}! ${dish.e}`, 8000);
+      const slot = $('fd' + k);
+      if (slot) slot.classList.add('fridge-pick');
+      await sleep(900);
+      if (!alive()) return;
+      // Достаёт: блюдо перелетает к питомцу, дверца закрывается.
+      if (slot) slot.remove();
+      const carried = document.createElementNS(NS, 'text');
+      carried.setAttribute('class', 'emo');
+      carried.setAttribute('font-size', 26);
+      carried.setAttribute('text-anchor', 'middle');
+      carried.textContent = dish.e;
+      $('fx-layer').appendChild(carried);
+      const [sx, sy] = FRIDGE_SLOTS[k];
+      await new Promise((res) => {
+        const t0 = performance.now();
+        const step = (t) => {
+          const q = Math.min(1, (t - t0) / 500);
+          carried.setAttribute('x', sx + (pos.x + 20 - sx) * q);
+          carried.setAttribute('y', sy + (pos.y - 46 - sy) * q - Math.sin(Math.PI * q) * 30);
+          if (q < 1) requestAnimationFrame(step); else res();
+        };
+        requestAnimationFrame(step);
+      });
+      closeFridge();
+      if (!alive()) { carried.remove(); return; }
+      // Несёт к тарелке (блюдо едет вместе с питомцем).
+      carried.remove();
+      const held = document.createElementNS(NS, 'text');
+      held.setAttribute('class', 'emo held');
+      held.setAttribute('x', 20); held.setAttribute('y', -46);
+      held.setAttribute('font-size', 26); held.setAttribute('text-anchor', 'middle');
+      held.textContent = dish.e;
+      petBody.appendChild(held);
+      status(`${n} несёт ${dish.name} к тарелке…`, 8000);
+      const ok = await walkTo(BOWL_X - 44, 1);
+      held.remove();
+      if (!ok || !alive()) { busy = false; renderButtons(); return; }
+      $('food-layer').innerHTML = emo(BOWL_X, F1 - 18, 30, dish.e, ' id="food"');
+      sound('chomp');
+      await sleep(400);
+      if (!alive()) { $('food-layer').innerHTML = ''; return; }
+      await eatAtBowl(dish.name);
     }
 
     // ---------- Игра с игрушкой ----------
@@ -1143,6 +1251,11 @@
       }
       if (mode === 'play') { throwToy(svgPoint(e)); return; }
       const f = e.target.closest('[data-f]');
+      if (f && f.dataset.f === 'fridge' && !hidden) {
+        if (sleeping) return;
+        fromFridge();
+        return;
+      }
       if (f && f.dataset.f === 'sofa' && !hidden) {
         if (sleeping) return;
         f.classList.remove('wig'); void f.getBBox(); f.classList.add('wig');
@@ -1207,6 +1320,7 @@
       if (sleeping) { clearInterval(sleeping.zzz); sleeping = null; $('night').classList.remove('on'); }
       bathTok++; // прервать купание
       endSofa(); // и занятие на диване
+      fridgeTok++; closeFridge(); pet.querySelectorAll('.held').forEach((el) => el.remove()); // и поход к холодильнику
       $('food-layer').innerHTML = '';
       $('pet-layer').appendChild(pet);
       S.pet = H.newPet(Math.random, S.pet.type);
