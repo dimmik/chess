@@ -1,6 +1,6 @@
 // Service worker «Гомоку»: пока есть сеть — свежие файлы, без сети — из кэша.
 // При изменении игры увеличивайте номер версии.
-const CACHE = 'gomoku-v2';
+const CACHE = 'gomoku-v3';
 const FILES = [
   './', 'index.html', 'gomoku.js', 'ai.js', 'brain.js', 'worker.js', 'puzzles.js', 'lessons.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
