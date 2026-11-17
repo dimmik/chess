@@ -3,6 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script>
+    // Высота окна в px вместо 100dvh. В установленном приложении Chrome после перехода
+    // между страницами оставляет у 100dvh старое значение (на 56px больше экрана),
+    // и нижние кнопки уезжают за край. innerHeight при этом верный.
+    (function () {
+      var root = document.documentElement;
+      function setVh() { root.style.setProperty('--vh', window.innerHeight + 'px'); }
+      setVh();
+      addEventListener('resize', setVh);
+      addEventListener('pageshow', setVh);
+      if (window.visualViewport) visualViewport.addEventListener('resize', setVh);
+      addEventListener('load', function () { setVh(); setTimeout(setVh, 300); setTimeout(setVh, 1000); });
+    })();
+  </script>
   <title>Ямб</title>
   <meta name="description" content="Сербский ямб: игра в кости с компьютерными соперниками или с друзьями за одним устройством.">
   <meta name="theme-color" content="#2f7d6d">
