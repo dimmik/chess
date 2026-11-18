@@ -38,7 +38,7 @@ assert.strictEqual(J.columnTotals({ ...partial, 1: 2 }).diff, 0);
 
 // Полные партии: три компьютерных игрока, оба режима — всегда доходят до конца.
 // Партия записывается так же, как в игре, и повтор должен восстановить те же листы.
-function playGame(gameCols) {
+function playGame(gameCols, decide = J.aiDecide) {
   const players = [0, 1, 2].map(() => J.emptySheet(gameCols));
   const rec = { cols: gameCols, players: [0, 1, 2].map((i) => ({ name: 'И' + i, type: 'ai' })), log: [], over: true };
   let turns = 0;
@@ -54,7 +54,7 @@ function playGame(gameCols) {
       dice = dice.map((d, i) => (held[i] ? d : 1 + Math.floor(Math.random() * 6)));
       turn.r.push(dice.join(''));
       for (let step = 0; step < 3; step++) {
-        const d = J.aiDecide(sheet, gameCols, announced, dice, roll);
+        const d = decide(sheet, gameCols, announced, dice, roll);
         if (d.announce) { assert.strictEqual(roll, 1); announced = d.announce; turn.a = announced; continue; }
         if (d.write) {
           assert.ok(J.allowed(sheet, d.write.col, d.write.row, announced), 'запись в разрешённую клетку');
@@ -96,4 +96,20 @@ for (let g = 0; g < 30; g++) playGame(['free']);
 const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 console.log('средний счёт компьютера (4 столбца):', avg, 'мин', Math.min(...scores), 'макс', Math.max(...scores));
 assert.ok(avg > 300 && avg < 1500);
+// «Хитрый» в быстрой партии: ходит по правилам и набирает заметно больше простого
+// (в среднем ~313 против ~255). В полной партии он играет как простой — и тоже доходит до конца.
+const quick = { simple: [], smart: [] };
+for (let g = 0; g < 40; g++) {
+  quick.simple.push(...playGame(['free']));
+  quick.smart.push(...playGame(['free'], J.smartDecide));
+}
+const mean = (a) => Math.round(a.reduce((x, y) => x + y, 0) / a.length);
+console.log('быстрая партия, средний счёт: простой', mean(quick.simple), '· хитрый', mean(quick.smart));
+assert.ok(mean(quick.smart) > mean(quick.simple) + 25, 'хитрый сильнее простого');
+playGame(J.ALL_COLS, J.smartDecide);
+
+// Первый бросок на пустом листе: готовую кенту записывает сразу, из 1-1-2-3-4 оставляет единицы.
+const empty = J.emptySheet(['free']);
+assert.deepStrictEqual(J.smartDecide(empty, ['free'], null, [1, 2, 3, 4, 5], 1), { write: { col: 'free', row: 'kenta' } });
+assert.deepStrictEqual(J.smartDecide(empty, ['free'], null, [1, 4, 1, 2, 3], 1), { hold: [true, false, true, false, false] });
 console.log('jamb ok');

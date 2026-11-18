@@ -232,6 +232,10 @@
         <div class="seg" data-opp="2"><button data-t="ai">🤖 Компьютер</button><button data-t="human">🧑 Человек</button><button data-t="none">✖ Нет</button></div>
         <input id="name2" maxlength="14">
       </div>
+      <div class="field" id="f-level"><label>Компьютер</label>
+        <div class="seg" id="seg-level"><button data-l="simple">🤖 Простой</button><button data-l="smart">🦊 Хитрый</button></div>
+        <p id="level-hint" style="font-size:13px;margin:6px 0 0">В полной партии «Хитрый» пока играет как простой — он умеет только быструю.</p>
+      </div>
       <div class="field"><label>Партия</label>
         <div class="seg" id="seg-mode"><button data-m="full">Полная · 4 столбца</button><button data-m="quick">Быстрая · 1 столбец</button></div>
       </div>
@@ -321,6 +325,7 @@
 
   <div id="confetti" aria-hidden="true"></div>
 
+  <script src="smart-data.js"></script>
   <script src="jamb.js"></script>
   <script>
   (function () {
@@ -335,10 +340,11 @@
     };
     const COL_SHORT = { down: '', up: '', free: 'Св', announce: 'Об' };
     const AVATAR = { me: '🧒', human: '🧑', ai: '🤖' };
+    const avatar = (p) => (p.type === 'ai' && p.level === 'smart' ? '🦊' : AVATAR[p.type]);
     const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 
     // ---------- Состояние ----------
-    let setup = { name0: 'Я', opp: [{ type: 'ai', name: 'Вася' }, { type: 'ai', name: 'Петя' }], mode: 'full' };
+    let setup = { name0: 'Я', opp: [{ type: 'ai', name: 'Вася' }, { type: 'ai', name: 'Петя' }], mode: 'full', level: 'simple' };
     try { Object.assign(setup, JSON.parse(localStorage.getItem('jamb-setup') || '{}')); } catch (e) { /* по умолчанию */ }
     let game = null;       // { cols, players: [{name, type, sheet}], current, dice, held, rollNo, announced }
     let view = 0;          // чей лист показан
@@ -364,7 +370,12 @@
       if (replay) { stopReplayTimer(); game = replay.live; replay = null; }
       if (game && !game.over) archive(game); // недоигранная партия тоже остаётся в истории
       const players = [{ name: setup.name0 || 'Я', type: 'me' }];
-      setup.opp.forEach((o, i) => { if (o.type !== 'none') players.push({ name: o.name || `Игрок ${i + 2}`, type: o.type }); });
+      setup.opp.forEach((o, i) => {
+        if (o.type === 'none') return;
+        const p = { name: o.name || `Игрок ${i + 2}`, type: o.type };
+        if (o.type === 'ai') p.level = setup.level;
+        players.push(p);
+      });
       const cols = setup.mode === 'quick' ? ['free'] : J.ALL_COLS.slice();
       game = { id: Date.now(), started: Date.now(), cols, players: players.map((p) => ({ ...p, sheet: J.emptySheet(cols) })), current: 0, log: [] };
       try { localStorage.setItem('jamb-setup', JSON.stringify(setup)); } catch (e) { /* ничего */ }
@@ -423,7 +434,7 @@
     function renderPlayers() {
       $('players').innerHTML = game.players.map((p, i) =>
         `<div class="chip${i === game.current ? ' turn' : ''}${i === view && view !== game.current ? ' viewing' : ''}" data-i="${i}">` +
-        `<span class="av">${AVATAR[p.type]}</span><span class="nm">${esc(p.name)}</span><span class="sc">${J.total(p.sheet, game.cols)}</span></div>`).join('');
+        `<span class="av">${avatar(p)}</span><span class="nm">${esc(p.name)}</span><span class="sc">${J.total(p.sheet, game.cols)}</span></div>`).join('');
     }
 
     function esc(s) {
@@ -615,9 +626,9 @@
     function finish() {
       const ranked = game.players.map((p) => ({ p, t: J.total(p.sheet, game.cols) })).sort((a, b) => b.t - a.t);
       const medals = ['🥇', '🥈', '🥉'];
-      $('results').innerHTML = ranked.map((r, i) => `<li><span>${medals[i] || ''} ${AVATAR[r.p.type]} ${esc(r.p.name)}</span><span>${r.t}</span></li>`).join('');
+      $('results').innerHTML = ranked.map((r, i) => `<li><span>${medals[i] || ''} ${avatar(r.p)} ${esc(r.p.name)}</span><span>${r.t}</span></li>`).join('');
       const winner = ranked[0].p;
-      $('over-emoji').textContent = winner.type === 'ai' ? '🤖' : '🏆';
+      $('over-emoji').textContent = winner.type === 'ai' ? avatar(winner) : '🏆';
       $('over-title').textContent = game.players.length > 1 ? `Победил${winner.type === 'ai' ? '' : '(а)'}: ${winner.name}!` : `Твой результат: ${ranked[0].t}`;
       if (winner.type !== 'ai') confetti();
       sound('win');
@@ -637,7 +648,7 @@
       const alive = () => token === aiToken && !replay;
       busy = true;
       render();
-      setStatus(`🤖 ${cur().name} бросает…`);
+      setStatus(`${avatar(cur())} ${cur().name} бросает…`);
       const step = () => {
         if (!alive()) return;
         roll(() => {
@@ -650,11 +661,11 @@
       const decide = (guard) => {
         if (!alive()) return;
         const p = cur();
-        const d = J.aiDecide(p.sheet, game.cols, game.announced, game.dice, game.rollNo);
+        const d = ((p.level === 'smart' && J.smartDecide) || J.aiDecide)(p.sheet, game.cols, game.announced, game.dice, game.rollNo);
         if (d.announce && guard < 3) {
           game.announced = d.announce;
           if (turnLog()) turnLog().a = d.announce;
-          toast(`🤖 ${p.name} объявляет «${ROW_NAME[d.announce]}» 📣`);
+          toast(`${avatar(p)} ${p.name} объявляет «${ROW_NAME[d.announce]}» 📣`);
           render();
           setTimeout(() => decide(guard + 1), 600);
           return;
@@ -663,18 +674,18 @@
           selected = d.write;
           const v = J.score(d.write.row, game.dice, game.rollNo);
           renderSheet();
-          setStatus(`🤖 ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
+          setStatus(`${avatar(p)} ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
           setTimeout(() => {
             if (!alive()) return;
             busy = false;
-            toast(`🤖 ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
+            toast(`${avatar(p)} ${p.name}: «${ROW_NAME[d.write.row]}» ${COL[d.write.col].icon} — ${v}`);
             write(d.write.col, d.write.row);
           }, 750);
           return;
         }
         game.held = d.hold;
         renderDice();
-        setStatus(`🤖 ${p.name} оставляет ${game.held.filter(Boolean).length ? game.dice.filter((_, i) => game.held[i]).join(', ') : 'ничего'} и бросает ещё…`);
+        setStatus(`${avatar(p)} ${p.name} оставляет ${game.held.filter(Boolean).length ? game.dice.filter((_, i) => game.held[i]).join(', ') : 'ничего'} и бросает ещё…`);
         setTimeout(step, 650);
       };
       step();
@@ -755,6 +766,9 @@
           $(`name${seg.dataset.opp}`).hidden = o.type === 'none';
         });
         document.querySelectorAll('#seg-mode button').forEach((b) => b.classList.toggle('on', b.dataset.m === setup.mode));
+        document.querySelectorAll('#seg-level button').forEach((b) => b.classList.toggle('on', b.dataset.l === setup.level));
+        $('f-level').hidden = !setup.opp.some((o) => o.type === 'ai');
+        $('level-hint').hidden = !(setup.level === 'smart' && setup.mode === 'full');
       };
       document.querySelectorAll('.seg[data-opp] button').forEach((b) => {
         b.onclick = () => {
@@ -770,6 +784,7 @@
         };
       });
       document.querySelectorAll('#seg-mode button').forEach((b) => { b.onclick = () => { setup.mode = b.dataset.m; sync(); }; });
+      document.querySelectorAll('#seg-level button').forEach((b) => { b.onclick = () => { setup.level = b.dataset.l; sync(); }; });
       sync();
       $('btn-setup-cancel').hidden = !game || !!game.over;
       $('setup').hidden = false;
@@ -806,7 +821,7 @@
     }
     const recordOf = (g) => ({
       id: g.id, date: g.started, cols: g.cols, over: !!g.over,
-      players: g.players.map((p) => ({ name: p.name, type: p.type })), log: g.log,
+      players: g.players.map((p) => ({ name: p.name, type: p.type, ...(p.level ? { level: p.level } : {}) })), log: g.log,
     });
     // Кладём партию в историю (или обновляем). Не влезает в хранилище — оставляем меньше старых партий.
     function archive(g) {
@@ -831,7 +846,7 @@
       for (const rec of loadHistory()) if (!histItems.some((it) => it.rec.id === rec.id)) histItems.push({ rec });
       $('hist-list').innerHTML = histItems.length ? histItems.map(({ rec, now }, i) => {
         const tag = now ? ' · идёт сейчас' : rec.over ? '' : ' · не доиграна';
-        const who = ranking(rec).map((r, k) => `${k === 0 && rec.over && rec.players.length > 1 ? '🏆 ' : ''}${AVATAR[r.p.type]} ${esc(r.p.name)} ${r.t}`).join(' · ');
+        const who = ranking(rec).map((r, k) => `${k === 0 && rec.over && rec.players.length > 1 ? '🏆 ' : ''}${avatar(r.p)} ${esc(r.p.name)} ${r.t}`).join(' · ');
         return `<button data-i="${i}"><span class="when">${fmtDate(rec.date)} · ${rec.cols.length > 1 ? 'полная' : 'быстрая'}${tag}</span><span class="who">${who}</span></button>`;
       }).join('') : '<p>Пока нет сыгранных партий — они появятся здесь.</p>';
       $('btn-hist-clear').hidden = !loadHistory().length;
@@ -886,7 +901,7 @@
       const { rec, steps, k } = replay;
       const step = steps[k];
       const turn = rec.log[step.t];
-      const who = turn ? `${AVATAR[rec.players[turn.p].type]} ${rec.players[turn.p].name}` : '';
+      const who = turn ? `${avatar(rec.players[turn.p])} ${rec.players[turn.p].name}` : '';
       if (step.kind === 'start') return 'Начало партии. Жми «▶ Смотреть» или листай по шагам.';
       if (step.kind === 'end') return '🏁 Итог: ' + ranking(rec).map((r) => `${r.p.name} ${r.t}`).join(', ');
       if (step.kind === 'announce') return `${who} объявляет «${ROW_NAME[turn.a]}» 📣`;
