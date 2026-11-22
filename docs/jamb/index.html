@@ -489,7 +489,7 @@
       // Полосы считаем внутри каждого блока строк, чтобы рядом с серой строкой итогов не было цветной.
       const rowHtml = (row, i) => `<tr${i % 2 ? ' class="alt"' : ''}><td class="lb">${ROW_NAME[row]}</td>${cols.map((c) => cellHtml(c, row)).join('')}</tr>`;
       h += J.TOP.map(rowHtml).join('');
-      h += `<tr class="calc"><td class="lb">Σ${cols.some((c) => totals[c].bonus) ? ' +30' : ''}</td>${cols.map((c) => `<td>${totals[c].top || ''}</td>`).join('')}</tr>`;
+      h += topSumRow(cols, totals, p.sheet);
       h += ['max', 'min'].map(rowHtml).join('');
       h += deltaRow(cols, totals);
       h += J.BOTTOM.map(rowHtml).join('');
@@ -497,6 +497,29 @@
       if (cols.length > 1) h += `<tr class="total"><td class="lb">Итого</td>${cols.map((c) => `<td>${totals[c].total}</td>`).join('')}</tr>`;
       h += `<tr class="grand"><td class="lb">Всего</td><td colspan="${cols.length}">${J.total(p.sheet, cols)}</td></tr>`;
       $('sheet').innerHTML = h + '</tbody>';
+    }
+
+    // Сумма верха (1–6): сколько набрано сейчас и бонус. «65 + 30» — с бонусом, «45» — без; ничего не записано — ''.
+    function topSumFormula(t, colSheet, sep) {
+      if (J.TOP.every((r) => colSheet[r] === null)) return '';
+      const sum = t.top - t.bonus;
+      return t.bonus ? `${sum}${sep}+${sep}${t.bonus}` : String(sum);
+    }
+
+    // Один столбец: сумма в подписи строки (как у Δ × 1). Несколько: в клетке, где есть бонус, — «65+30» и «= 95».
+    function topSumRow(cols, totals, sheet) {
+      if (cols.length === 1) {
+        const t = totals[cols[0]];
+        const f = topSumFormula(t, sheet[cols[0]], ' ');
+        return `<tr class="calc"><td class="lb">Σ${f ? ' = ' + f : ''}</td><td>${t.top || ''}</td></tr>`;
+      }
+      const cell = (c) => {
+        const t = totals[c];
+        if (!t.bonus) return `<td>${t.top || ''}</td>`;
+        return `<td><span class="fx">${topSumFormula(t, sheet[c], '')}</span><span class="res">= ${t.top}</span></td>`;
+      };
+      const two = cols.some((c) => totals[c].bonus);
+      return `<tr class="calc${two ? ' two' : ''}"><td class="lb">Σ</td>${cols.map(cell).join('')}</tr>`;
     }
 
     // «19 × 3»: разность Макс и Мин и число в строке «1»; чего ещё нет — «?». Пустой столбец — ''.
