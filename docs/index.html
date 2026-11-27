@@ -58,9 +58,18 @@
       <div class="status-card">
         <div class="status" id="status" role="status" aria-live="polite">Твой ход!</div>
         <div class="explain" id="explain"></div>
+        <div class="view-actions" id="view-actions" hidden>
+          <button class="btn" id="btn-view-play" title="Отменить ходы после этого и играть дальше отсюда">↩️ Играть отсюда</button>
+          <button class="btn btn-primary" id="btn-view-live" title="Вернуться к партии">▶️ К игре</button>
+        </div>
       </div>
 
       <div class="play-ui" id="play-ui">
+        <div class="moves-bar">
+          <button class="mv-nav" id="mv-prev" title="Ход назад (←)" aria-label="Ход назад">◀</button>
+          <div class="moves" id="moves" aria-label="Запись ходов"></div>
+          <button class="mv-nav" id="mv-next" title="Ход вперёд (→)" aria-label="Ход вперёд">▶</button>
+        </div>
         <div class="toolbar">
           <button class="tb" id="btn-undo" title="Вернуть ход"><span class="ico">↩️</span><span class="lbl">Назад</span></button>
           <button class="tb" id="btn-restart" title="Изначальная позиция" hidden><span class="ico">⏮️</span><span class="lbl">Заново</span></button>

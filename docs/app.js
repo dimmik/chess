@@ -59,6 +59,11 @@
   let aiTimer = null;
   let over = null;
   let drag = null;
+  let viewPly = null;      // просмотр записи: позиция после стольких ходов (null — идёт игра)
+  let notes = null;        // запись ходов для ленты: { fen, list: [{ m, html, title }] }
+  // Что написано в карточке во время игры. Пока смотрим запись, карточка занята просмотром,
+  // а ходы компьютера и подсказки продолжают писать сюда — и появятся, когда вернёмся к игре.
+  const live = { status: '', mood: '', explain: '' };
 
   const $ = (id) => document.getElementById(id);
   const boardEl = $('board');
@@ -109,7 +114,7 @@
   function renderHintArrow() {
     const svg = $('hint-arrow');
     // У SVG нет свойства hidden — переключаем атрибут.
-    if (!hint || editing) { svg.setAttribute('hidden', ''); return; }
+    if (!hint || editing || viewPly !== null) { svg.setAttribute('hidden', ''); return; }
     const x1 = displayCol(hint.from) + 0.5, y1 = displayRow(hint.from) + 0.5;
     let x2 = displayCol(hint.to) + 0.5, y2 = displayRow(hint.to) + 0.5;
     // Укорачиваем линию, чтобы наконечник указывал в центр клетки, а не заходил за неё.
@@ -125,17 +130,19 @@
   function render(anim) {
     renderEdges();
     if (editing) { renderEditor(); return; }
-    const myTurn = !over && !thinking && isHuman(game.turn);
+    const g = shownGame();
+    const viewing = g !== game;
+    const myTurn = !viewing && !over && !thinking && isHuman(game.turn);
     const myMoves = myTurn ? game.moves() : [];
     const movableFrom = new Set(myMoves.map((m) => m.from));
-    const checkSq = game.inCheck() ? game.kingSquare(game.turn) : -1;
-    const last = game.log[game.log.length - 1];
+    const checkSq = g.inCheck() ? g.kingSquare(g.turn) : -1;
+    const last = g.log[g.log.length - 1];
     const targetBySq = new Map(targets.map((m) => [m.to, m]));
 
     for (let d = 0; d < 64; d++) {
       const i = squareAt(d);
       const el = squares[d];
-      const p = game.board[i];
+      const p = g.board[i];
       const r = displayRow(i), c = displayCol(i);
       const cls = ['sq', (r + c) % 2 ? 'dark' : 'light'];
       if (last && (i === last.from || i === last.to)) cls.push('last');
@@ -143,7 +150,7 @@
       if (i === checkSq) cls.push('check');
       if (settings.movable && movableFrom.has(i) && selected < 0) cls.push('movable');
       if (movableFrom.has(i) || (p && myTurn)) cls.push('clickable');
-      if (hint && (i === hint.from || i === hint.to)) cls.push(i === hint.from ? 'hint-from' : 'hint-to');
+      if (hint && !viewing && (i === hint.from || i === hint.to)) cls.push(i === hint.from ? 'hint-from' : 'hint-to');
       let t = targetBySq.get(i);
       // Пока показана подсказка, у фигуры отмечена только подсказанная клетка — чтобы не перепутать.
       if (t && hint && selected === hint.from && i !== hint.to) t = null;
@@ -167,9 +174,11 @@
       el.innerHTML = html;
     }
 
-    if (anim) animateMove(anim);
+    boardEl.classList.toggle('viewing', viewing);
+    if (anim && !viewing) animateMove(anim);
     renderHintArrow();
-    renderBars();
+    renderBars(g);
+    renderMoves();
     saveGame();
     // В задачах вместо «Назад» и «Новая» — «Заново» и «Проверить».
     const pz = mode === 'puzzle';
@@ -215,10 +224,10 @@
     return { avatar: '🤖', name: `Компьютер · ${LEVEL_NAMES[level]}` };
   }
 
-  function renderBars() {
+  function renderBars(g = game) {
     // Съеденные фигуры показываем у того, кто их съел.
     const eaten = { w: [], b: [] };
-    for (const m of game.log) if (m.captured) eaten[colorOf(m.piece)].push(m.captured);
+    for (const m of g.log) if (m.captured) eaten[colorOf(m.piece)].push(m.captured);
     const order = 'qrbnp';
 
     for (const [pos, side] of [['top', other(orientation)], ['bottom', orientation]]) {
@@ -227,22 +236,149 @@
       $(`name-${pos}`).textContent = info.name;
       const list = eaten[side].slice().sort((a, b) => order.indexOf(typeOf(a)) - order.indexOf(typeOf(b)));
       let html = list.map((p) => pieceSvg(p, 'cap')).join('');
-      const adv = game.material() * (side === 'w' ? 1 : -1);
+      const adv = g.material() * (side === 'w' ? 1 : -1);
       if (adv > 0 && mode !== 'puzzle') html += `<span class="adv">+${adv}</span>`;
       $(`captured-${pos}`).innerHTML = html;
-      $(`bar-${pos}`).classList.toggle('active', !over && game.turn === side);
+      $(`bar-${pos}`).classList.toggle('active', g === game ? !over && game.turn === side : g.turn === side);
       $(`bar-${pos}`).classList.toggle('side-b', side === 'b');
     }
   }
 
+  // ---------- Запись ходов ----------
+
+  // Какая позиция на доске: идущая партия или та, что выбрана в записи.
+  let shownCache = null;
+  function shownGame() {
+    if (viewPly === null || viewPly >= game.log.length) return game;
+    if (shownCache && shownCache.game === game && shownCache.ply === viewPly && shownCache.len === game.log.length) return shownCache.g;
+    const g = game.clone();
+    while (g.log.length > viewPly) g.undo();
+    shownCache = { game, ply: viewPly, len: game.log.length, g };
+    return g;
+  }
+
+  // Запись для ленты: значок фигуры, клетки, «×» — взятие, «+» — шах, «#» — мат. Достраивается по ходу игры.
+  function moveNotes() {
+    const log = game.log;
+    if (!notes || notes.fen !== startFen || notes.list.length > log.length || notes.list.some((n, k) => n.m !== log[k])) {
+      notes = { fen: startFen, list: [], g: new Chess(startFen), ver: (notes ? notes.ver : 0) + 1 };
+    }
+    const g = notes.g;
+    while (notes.list.length < log.length) {
+      const m = log[notes.list.length];
+      const who = colorOf(m.piece);
+      g.makeMove(m);
+      const check = g.inCheck();
+      const mate = check && g.moves().length === 0;
+      const tail = mate ? '#' : check ? '+' : '';
+      let html, title;
+      if (m.flag === 'k' || m.flag === 'q') {
+        html = `${pieceSvg(m.piece, 'mv-pc')}${m.flag === 'k' ? '0-0' : '0-0-0'}${tail}`;
+        title = `${SIDE[who].icon} рокировка`;
+      } else {
+        const promo = m.promotion ? pieceSvg(who === 'w' ? m.promotion.toUpperCase() : m.promotion, 'mv-pc') : '';
+        html = `${pieceSvg(m.piece, 'mv-pc')}${squareName(m.from)}${m.captured ? '×' : '–'}${squareName(m.to)}${promo}${tail}`;
+        title = `${SIDE[who].icon} ${NAMES[typeOf(m.piece)].nom} ${squareName(m.from)} → ${squareName(m.to)}` +
+          (m.captured ? `, съел ${NAMES[typeOf(m.captured)].acc}` : '') + (m.promotion ? `, стал ${NAMES[m.promotion].ins}` : '');
+      }
+      if (mate) title += ', мат!';
+      else if (check) title += ', шах';
+      notes.list.push({ m, html, title, who });
+    }
+    return notes.list;
+  }
+
+  let movesKey = '';
+  function renderMoves() {
+    const box = $('moves');
+    const list = moveNotes();
+    const at = viewPly === null ? list.length : viewPly;
+    const start = new Chess(startFen);
+    let num = start.fullmove;
+    let h = '';
+    if (!list.length) h = '<span class="mv-empty">Здесь появятся ходы</span>';
+    else h = `<button class="mv mv-start${at === 0 ? ' on' : ''}" data-ply="0" title="Начальная позиция">⏮</button>`;
+    list.forEach((n, k) => {
+      if (n.who === 'w') h += `<span class="mv-num">${num}.</span>`;
+      else if (k === 0) h += `<span class="mv-num">${num}…</span>`;
+      const cls = ['mv'];
+      if (k + 1 === at) cls.push(viewPly === null ? 'last' : 'on');
+      h += `<button class="${cls.join(' ')}" data-ply="${k + 1}" title="Ход ${k + 1}: ${n.title}">${n.html}</button>`;
+      if (n.who === 'b') num++;
+    });
+    const key = `${notes.ver}|${list.length}|${at}|${viewPly === null}`;
+    if (key !== movesKey) {
+      box.innerHTML = h;
+      movesKey = key;
+      // Выбранный ход — посередине ленты; во время игры лента прокручена к последнему ходу.
+      const on = box.querySelector('.mv.on, .mv.last');
+      box.scrollLeft = on ? on.offsetLeft - (box.clientWidth - on.offsetWidth) / 2 : 0;
+    }
+    $('mv-prev').disabled = at === 0;
+    $('mv-next').disabled = viewPly === null;
+  }
+
+  // Перейти к позиции после ply ходов (ply = все ходы — обратно к игре).
+  function setView(ply) {
+    if (editing) return;
+    ply = Math.max(0, Math.min(ply, game.log.length));
+    if (ply === game.log.length) { goLive(); return; }
+    viewPly = ply;
+    deselect();
+    render();
+    paintStatus();
+  }
+
+  function goLive() {
+    if (viewPly === null) return;
+    viewPly = null;
+    render();
+    paintStatus();
+  }
+
+  const stepView = (d) => setView((viewPly === null ? game.log.length : viewPly) + d);
+
+  // «Играть отсюда»: ходы после выбранного отменяются, партия продолжается с этой позиции.
+  function playFromHere() {
+    if (viewPly === null) return;
+    if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+    thinking = false;
+    while (game.log.length > viewPly) game.undo();
+    viewPly = null;
+    over = null;
+    deselect();
+    hint = null;
+    $('gameover').hidden = true;
+    live.explain = '';
+    setExplain('Продолжаем с этого места! 🙂');
+    afterMove(null);
+  }
+
   function setStatus(text, mood) {
-    const el = $('status');
-    el.textContent = text;
-    el.className = 'status' + (mood ? ' ' + mood : '');
+    live.status = text;
+    live.mood = mood || '';
+    paintStatus();
   }
 
   function setExplain(text) {
-    $('explain').textContent = text || '';
+    live.explain = text || '';
+    paintStatus();
+  }
+
+  // Карточка: во время игры — статус и пояснение, при просмотре записи — какой ход и кнопки.
+  function paintStatus() {
+    const el = $('status');
+    const viewing = viewPly !== null;
+    if (viewing) {
+      el.textContent = viewPly === 0 ? '👀 Начальная позиция' : `👀 Ход ${viewPly} из ${game.log.length}`;
+      el.className = 'status';
+    } else {
+      el.textContent = live.status;
+      el.className = 'status' + (live.mood ? ' ' + live.mood : '');
+    }
+    $('explain').textContent = viewing ? '' : live.explain;
+    $('explain').hidden = viewing;
+    $('view-actions').hidden = !viewing;
   }
 
   // Сколько ходов осталось до мата в задаче.
@@ -253,12 +389,12 @@
   function idleStatus() {
     if (puzzleSpent()) {
       setStatus(`Ход ${SIDE[game.turn].gen} ${SIDE[game.turn].icon}`);
-      if (!$('explain').textContent) setExplain('Ходы задачи закончились — можно доиграть позицию, «Назад» или «Заново».');
+      if (!live.explain) setExplain('Ходы задачи закончились — можно доиграть позицию, «Назад» или «Заново».');
       return;
     }
     if (mode === 'puzzle' && game.turn !== player) {
       setStatus(`Ход соперника: за ${SIDE[game.turn].gen} ${SIDE[game.turn].icon}`);
-      if (!$('explain').textContent) {
+      if (!live.explain) {
         setExplain(`Сходи за ${SIDE[game.turn].gen} сам — или нажми «🛡️ Ответ», и я предложу самую упорную защиту.`);
       }
       return;
@@ -266,7 +402,7 @@
     if (mode === 'puzzle') {
       const left = puzzleMovesLeft();
       setStatus(left === 1 ? 'Поставь мат одним ходом! 🎯' : `Мат в ${left} хода: твой ход 🎯`);
-      if (!$('explain').textContent) {
+      if (!live.explain) {
         setExplain(left === 1
           ? `Ходят ${SIDE[player].nom}. Найди ход, после которого королю ${SIDE[other(player)].gen} некуда деться.`
           : `Ходят ${SIDE[player].nom}. Найди ход, после которого мат будет при любом ответе соперника.`);
@@ -279,7 +415,7 @@
         setExplain(`Короля ${SIDE[game.turn].gen} хотят съесть. Уведи его, закрой другой фигурой или съешь того, кто нападает.`);
       } else {
         setStatus(`Ход ${SIDE[game.turn].gen} ${SIDE[game.turn].icon}`);
-        if (!$('explain').textContent) {
+        if (!live.explain) {
           setExplain('Ты ходишь и за белых, и за чёрных. Нажми на фигуру, которая светится зелёным.');
         }
       }
@@ -290,7 +426,7 @@
       setExplain('Твоего короля хотят съесть. Убери его в безопасное место, закрой другой фигурой или съешь того, кто нападает.');
     } else {
       setStatus('Твой ход! 🙂');
-      if (!$('explain').textContent) {
+      if (!live.explain) {
         setExplain(settings.movable
           ? 'Нажми на фигуру, которая светится зелёным, — и увидишь, куда она может пойти.'
           : 'Нажми на свою фигуру, чтобы её выбрать.');
@@ -321,6 +457,7 @@
   const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
   function onSquarePress(i) {
+    if (viewPly !== null) { goLive(); return false; }
     if (over || thinking || !isHuman(game.turn)) return false;
     const p = game.board[i];
     const target = targets.find((m) => m.to === i);
@@ -462,6 +599,7 @@
     closeOverlays();
     mode = 'puzzle';
     puzzle = { set, index };
+    viewPly = null;
     startFen = PUZZLES[set].list[index].fen;
     game = new Chess(startFen);
     player = game.turn;
@@ -474,7 +612,7 @@
     render();
     setExplain('');
     idleStatus();
-    if (name) setExplain(`«${name}». ${$('explain').textContent}`);
+    if (name) setExplain(`«${name}». ${live.explain}`);
   }
 
   function solvedList() {
@@ -567,6 +705,7 @@
 
   function undoMove() {
     if (!canUndo()) return;
+    viewPly = null;
     if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
     thinking = false;
     // Откатываем до последнего хода игрока включительно (вдвоём — ровно один ход).
@@ -582,6 +721,7 @@
   }
 
   function showHint() {
+    if (viewPly !== null) goLive();
     if (over || thinking || !isHuman(game.turn)) return;
     // В задаче на ходу соперника — «Ответ»: самая упорная защита.
     const inPuzzle = mode === 'puzzle' && !puzzleSpent();
@@ -700,6 +840,7 @@
     player = color;
     level = lvl;
     puzzle = null;
+    viewPly = null;
     Object.assign(settings, { mode, color, level, fen: fen || null });
     saveSettings();
     startFen = fen || START_FEN;
@@ -912,6 +1053,7 @@
       return false;
     }
     ({ mode, player, level, orientation, startFen, puzzle } = s);
+    viewPly = null;
     over = game.outcome();
     if (over) {
       render();
@@ -928,6 +1070,7 @@
   const PALETTE = ['K', 'Q', 'R', 'B', 'N', 'P', 'x', 'k', 'q', 'r', 'b', 'n', 'p'];
 
   function openEditor(fen) {
+    viewPly = null;
     if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
     thinking = false;
     closeOverlays();
@@ -1270,7 +1413,7 @@
   $('btn-menu').onclick = () => { closeOverlays(); $('menu').hidden = false; };
   $('btn-menu-close').onclick = () => { $('menu').hidden = true; };
   $('btn-settings').onclick = openSettings;
-  $('btn-edit').onclick = () => openEditor(game.fen());
+  $('btn-edit').onclick = () => openEditor(shownGame().fen());
   $('btn-flip').onclick = () => { $('menu').hidden = true; orientation = other(orientation); render(); };
   // Полный экран и установка обрабатываются в pwa.js — здесь только закрываем меню.
   $('btn-fullscreen').addEventListener('click', () => { $('menu').hidden = true; });
@@ -1284,7 +1427,7 @@
   $('btn-history-close').onclick = () => { $('history').hidden = true; };
   $('btn-share').onclick = async () => {
     $('menu').hidden = true;
-    const msg = await sharePosition(game.fen());
+    const msg = await sharePosition(shownGame().fen());
     if (msg) setExplain(msg);
   };
   $('history-list').onclick = (e) => {
@@ -1319,7 +1462,21 @@
   }
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') for (const id of ['menu', 'puzzles', 'history', 'confirm', 'gameover']) $(id).hidden = true;
+    // Стрелки — по записи ходов (если не открыто окно и не печатаем).
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !editing && !e.target.closest('input, textarea') &&
+        OVERLAYS.every((id) => $(id).hidden)) {
+      e.preventDefault();
+      stepView(e.key === 'ArrowLeft' ? -1 : 1);
+    }
   });
+  $('moves').onclick = (e) => {
+    const b = e.target.closest('[data-ply]');
+    if (b) setView(Number(b.dataset.ply));
+  };
+  $('mv-prev').onclick = () => stepView(-1);
+  $('mv-next').onclick = () => stepView(1);
+  $('btn-view-live').onclick = goLive;
+  $('btn-view-play').onclick = playFromHere;
   setupEditorControls();
   // Клик мимо окна «конец игры» закрывает его, чтобы посмотреть на доску.
   $('gameover').onclick = (e) => { if (e.target === $('gameover')) $('gameover').hidden = true; };
